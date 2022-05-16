@@ -44,7 +44,20 @@ from pytorch_lightning import LightningModule
 
 # Init random cameras
 # https://github.com/facebookresearch/pytorch3d/blob/main/tests/test_cameras.py
-
+cam_mu = {
+    "dist": 3.0,
+    "elev": 0.0,
+    "azim": 0.0,
+    "fov": 10,
+    "aspect_ratio": 1.0,
+}
+cam_bw = {
+    "dist": 1.0,
+    "elev": 0.5,
+    "azim": 0.5,
+    "fov": 60,
+    "aspect_ratio": 0.5
+}
 def init_random_cameras(
     cam_type: typing.Type[CamerasBase], batch_size: int, random_z: bool = False
 ):
@@ -53,9 +66,9 @@ def init_random_cameras(
     # if not random_z:
     #     T[:, 2] = 4
     # R = so3_exp_map(torch.randn(batch_size, 3) * 3.0)
-    dist = torch.rand(batch_size) * 2 + 3.0
-    elev = torch.randn(batch_size) * 0.5
-    azim = torch.randn(batch_size) * 0.5
+    dist = torch.randn(batch_size) * cam_bw["dist"] + cam_mu["dist"]
+    elev = torch.randn(batch_size) * cam_bw["elev"] + cam_mu["elev"]
+    azim = torch.randn(batch_size) * cam_bw["azim"] + cam_mu["azim"]
     R, T = look_at_view_transform(dist, elev, azim)
 
     cam_params = {"R": R, "T": T}
@@ -78,8 +91,8 @@ def init_random_cameras(
         
         if cam_type == FoVPerspectiveCameras:
             # cam_params["fov"] = torch.rand(batch_size) * 60 + 30
-            cam_params["fov"] = torch.rand(batch_size) * 20 + 50
-            cam_params["aspect_ratio"] = torch.rand(batch_size) * 0.5 + 0.5
+            cam_params["fov"] = torch.randn(batch_size) * cam_bw["fov"] + cam_mu["fov"]
+            cam_params["aspect_ratio"] = torch.randn(batch_size) * cam_bw["aspect_ratio"] + cam_mu["aspect_ratio"]
         else:
             cam_params["max_y"] = torch.rand(batch_size) * 0.2 + 0.9
             cam_params["min_y"] = -(torch.rand(batch_size)) * 0.2 - 0.9
