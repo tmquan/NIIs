@@ -1,5 +1,6 @@
 import os
 import glob
+import numpy as np
 
 from typing import Callable, Optional, Sequence
 
@@ -13,7 +14,7 @@ from monai.transforms import (
     apply_transform, 
     AddChanneld,
     Compose, OneOf, 
-    LoadImaged, Spacingd,
+    LoadImaged, Spacingd, Lambdad,
     Orientationd, DivisiblePadd, 
     RandFlipd, RandZoomd, RandScaleCropd, 
     RandAffined,
@@ -56,6 +57,28 @@ class UnpairedDataset(Dataset, monai.transforms.Randomizable):
             data = apply_transform(self.transform, data)
 
         return data
+
+def HU2Density(hu_values, smoothAir=False):
+    # Use two linear interpolations from data: (HU,g/cm^3)
+    # -1000 0.00121000000000000
+    # -98    0.930000000000000
+    # -97    0.930486000000000
+    # 14 1.03000000000000
+    # 23 1.03100000000000
+    # 100    1.11990000000000
+    # 101    1.07620000000000
+    # 1600   1.96420000000000
+    # 3000   2.80000000000000
+    # use fit1 for lower HU: density = 0.001029*HU + 1.030 (fit to first 4)
+    # use fit2 for upper HU: density = 0.0005886*HU + 1.03 (fit to last 5)
+
+    # set air densities
+    if smoothAir:
+        hu_values[hu_values <= -900] = -1000
+    #hu_values[hu_values > 600] = 5000;
+    densities = np.maximum(np.minimum(
+        0.001029 * hu_values + 1.030, 0.0005886 * hu_values + 1.03), 0)
+    return densities
 
 class CustomDataModule(LightningDataModule):
     def __init__(self, 
@@ -112,23 +135,42 @@ class CustomDataModule(LightningDataModule):
                 Spacingd(keys=["image3d"], pixdim=(1.0, 1.0, 1.0), mode=["bilinear"]),  
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
-                    # Orientationd( keys=('image3d'), axcodes="ALI"),
-                    # Orientationd( keys=('image3d'), axcodes="PLI"),
-                    Orientationd( keys=('image3d'), axcodes="ARI"),
-                    Orientationd( keys=('image3d'), axcodes="PRI"),
-                    # Orientationd( keys=["image3d"], axcodes="LPI"),
-                    # Orientationd( keys=["image3d"], axcodes="RPI"),
-                    # Orientationd( keys=["image3d"], axcodes="LAI"),
-                    # Orientationd( keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=('image3d'), axcodes="ARI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="ALI"),
+                    Orientationd(keys=('image3d'), axcodes="PLI"),
+                    Orientationd(keys=["image3d"], axcodes="LAI"),
+                    Orientationd(keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=["image3d"], axcodes="LPI"),
+                    Orientationd(keys=["image3d"], axcodes="RPI"),
                     ],
                 ),
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
+                #         a_min=-500, #-200, 
+                #         a_max=3071, #1500,
+                #         b_min=0.0,
+                #         b_max=1.0),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                #         a_min=-200, 
+                #         a_max=1500,
+                #         b_min=0.0,
+                #         b_max=1.0),
                 ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
                         a_min=-500, #-200, 
                         a_max=3071, #1500,
-                        b_min=0.0,
-                        b_max=1.0),
-                # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
+                        b_min=-500,
+                        b_max=3071),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                #         a_min=-200, 
+                #         a_max=1500,
+                #         b_min=-200,
+                #         b_max=1500),
+                Lambdad(keys=["image3d"], func=HU2Density),
+                ScaleIntensityd(keys=["image3d"], 
+                        minv=0.0,
+                        maxv=1.0),
+                RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
                 RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
@@ -171,22 +213,41 @@ class CustomDataModule(LightningDataModule):
                 Spacingd(keys=["image3d"], pixdim=(1.0, 1.0, 1.0), mode=["bilinear"]),  
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
-                    # Orientationd( keys=('image3d'), axcodes="ALI"),
-                    # Orientationd( keys=('image3d'), axcodes="PLI"),
-                    Orientationd( keys=('image3d'), axcodes="ARI"),
-                    Orientationd( keys=('image3d'), axcodes="PRI"),
-                    # Orientationd( keys=["image3d"], axcodes="LPI"),
-                    # Orientationd( keys=["image3d"], axcodes="RPI"),
-                    # Orientationd( keys=["image3d"], axcodes="LAI"),
-                    # Orientationd( keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=('image3d'), axcodes="ARI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="ALI"),
+                    Orientationd(keys=('image3d'), axcodes="PLI"),
+                    Orientationd(keys=["image3d"], axcodes="LAI"),
+                    Orientationd(keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=["image3d"], axcodes="LPI"),
+                    Orientationd(keys=["image3d"], axcodes="RPI"),
                     ],
                 ), 
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
+                #         a_min=-500, #-200, 
+                #         a_max=3071, #1500,
+                #         b_min=0.0,
+                #         b_max=1.0),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                #         a_min=-200, 
+                #         a_max=1500,
+                #         b_min=0.0,
+                #         b_max=1.0),
                 ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
                         a_min=-500, #-200, 
                         a_max=3071, #1500,
-                        b_min=0.0,
-                        b_max=1.0),
+                        b_min=-500,
+                        b_max=3071),
+                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                #         a_min=-200, 
+                #         a_max=1500,
+                #         b_min=-200,
+                #         b_max=1500),
+                Lambdad(keys=["image3d"], func=HU2Density),
+                ScaleIntensityd(keys=["image3d"], 
+                        minv=0.0,
+                        maxv=1.0),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
