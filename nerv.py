@@ -235,11 +235,6 @@ class NeRVLightningModule(LightningModule):
         self.delta = hparams.delta
         self.save_hyperparameters()
 
-        self.mapper = CNNMapper(
-            input_dim = 1,
-            output_dim = 2,
-        )
-
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
@@ -261,24 +256,118 @@ class NeRVLightningModule(LightningModule):
             renderer = self.visualizer,
         )
 
+        self.volume_net = nn.Sequential(
+            CustomUNet(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=1, # value and alpha
+                channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                strides=(2, 2, 2, 2),
+                num_res_units=2,
+                kernel_size=5,
+                up_kernel_size=5,
+                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
+                act=("elu", {"inplace": True}),
+                norm=Norm.BATCH,
+                dropout=0.5,
+            ), 
+            nn.Sigmoid()  
+        )
+
+        self.camera_net = torchvision.models.densenet121(pretrained=False)
+        self.camera_net.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.camera_net.classifier = nn.Linear(1024, 6)
+
+        self.l1loss = nn.L1Loss()
         
-    def forward(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
+    def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
-        
-        pass
+        volumes = Volumes(
+            features = torch.cat([image3d]*3, dim=1),
+            densities = torch.ones_like(image3d) / 512., 
+            voxel_size = 3.2 / self.shape,
+        )
+        return self.viewer(cameras=cameras, volumes=volumes)
+
+    def forward_volume(self, image2d: torch.Tensor, cameras: Type[CamerasBase]=None):
+        image2d_repeat = image2d.unsqueeze(-3).repeat(1, 1, self.shape, 1, 1)
+        return self.volume_net(image2d_repeat)
+    
+    def forward_camera(self, image2d: torch.Tensor):
+        return self.camera_net(image2d)
     
 
-    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         image3d = batch["image3d"]
         image2d = batch["image2d"]
         
-        pass
+        # Generate variational camera
+        varcams_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+
+        with torch.no_grad():
+            self.varcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                               batch_size=self.batch_size, 
+                                               cam_mu=cam_mu,
+                                               cam_bw=cam_bw,
+                                               cam_ft=varcams_feat, 
+                                               random=True).to(image3d.device)
+
+        # Three-way cycle consistent loss
+        varcams_im2d = self.forward_screen(image3d, self.varcams)
+        varcams_pred = self.forward_camera(varcams_im2d)
+        varcams_im3d = self.forward_volume(varcams_im2d)
+
+        varcams_loss = self.l1loss(varcams_pred, varcams_feat)
+        varim3d_loss = self.l1loss(varcams_im3d, image3d)
+
+        self.log(f'{stage}_cam_loss', varcams_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_vol_loss', varim3d_loss, on_step=True, prog_bar=True, logger=True)
+                
+        info = {'loss': varcams_loss + varim3d_loss}
+        return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         image3d = batch["image3d"]
-        image2d = batch["image2d"]
-        
-        pass
+        image2d = batch["image2d"]        
+        # Generate deterministic cameras
+        detcams_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+
+        with torch.no_grad():
+            self.detcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                               batch_size=self.batch_size, 
+                                               cam_mu=cam_mu,
+                                               cam_bw=cam_bw,
+                                               cam_ft=detcams_feat, 
+                                               random=True).to(image3d.device)
+
+        # Three-way cycle consistent loss
+        detcams_im2d = self.forward_screen(image3d, self.detcams)
+        detcams_pred = self.forward_camera(detcams_im2d)
+        detcams_im3d = self.forward_volume(detcams_im2d)
+
+        detcams_loss = self.l1loss(detcams_pred, detcams_feat)
+        detim3d_loss = self.l1loss(detcams_im3d, image3d)
+
+        self.log(f'{stage}_cam_loss', detcams_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_vol_loss', detim3d_loss, on_step=True, prog_bar=True, logger=True)
+
+        reconst_im3d = self.forward_volume(image2d)
+        if batch_idx == 0:
+            with torch.no_grad():
+                viz = torch.cat([image3d[...,128], 
+                                 detcams_im3d[...,128], 
+                                 detcams_im2d,
+                                 image2d], dim=-1)
+                grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
+                tensorboard = self.logger.experiment
+                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
+
+                plot_2d_or_3d_image(data=torch.cat([image3d, 
+                                                    detcams_im3d, 
+                                                    reconst_im3d], dim=-2), 
+                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+        info = {'loss': detcams_loss + detim3d_loss}
+        return info
 
     def validation_step(self, batch, batch_idx):
         return self.evaluation_step(batch, batch_idx, stage='validation')
@@ -287,7 +376,8 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_step(batch, batch_idx, stage='test')
 
     def evaluation_epoch_end(self, outputs, stage: Optional[str]='evaluation'):
-        pass
+        loss = torch.stack([x[f'loss'] for x in outputs]).mean()
+        self.log(f'{stage}_loss_epoch', loss, on_step=False, prog_bar=True, logger=True)
 
     def train_epoch_end(self, outputs):
         return self.evaluation_epoch_end(outputs, stage='train')
@@ -547,20 +637,19 @@ if __name__ == "__main__":
     datamodule.setup()
 
     ####### Test camera mu and bandwidth ########
-    test_random_uniform_cameras(hparams, datamodule)
-
+    # test_random_uniform_cameras(hparams, datamodule)
     #############################################
 
-    # model = NeRPLightningModule(
-    #     hparams = hparams
-    # )
-    # model = model.load_from_checkpoint(hparams.ckpt, strict=False) if hparams.ckpt is not None else model
+    model = NeRVLightningModule(
+        hparams = hparams
+    )
+    model = model.load_from_checkpoint(hparams.ckpt, strict=False) if hparams.ckpt is not None else model
 
 
-    # trainer.fit(
-    #     model, 
-    #     datamodule,
-    # )
+    trainer.fit(
+        model, 
+        datamodule,
+    )
 
     # test
 

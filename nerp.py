@@ -301,7 +301,7 @@ class CNNMapper(nn.Module):
         # alphas = self.vnet(raw_data)
         concat = self.vnet( raw_data )
         values = concat[:,[0],:,:,:] / 2.0 + 0.5
-        alphas = torch.ones_like(values) + concat[:,[1],:,:,:]
+        alphas = (torch.ones_like(values) + concat[:,[1],:,:,:]) / 2.0
 
         features = torch.cat([values, alphas], dim=1) 
         return features

@@ -163,7 +163,7 @@ class VolumeModel(nn.Module):
         self._renderer = renderer
         
     def forward(self, cameras, volumes):
-        batch_size = cameras.R.shape[0]
+        # batch_size = cameras.R.shape[0]
 
         # # Convert the log-space values to the densities/colors
         # densities = torch.sigmoid(self.log_densities)
@@ -463,43 +463,6 @@ class CustomUNet(nn.Module):
         x = self.model(x)
         return x
 
-class CNNMapper(nn.Module):
-    def __init__(self, 
-                 input_dim: int = 1,
-                 output_dim: int = 1,
-    ): 
-        super().__init__()
-        self.vnet = nn.Sequential(
-            CustomUNet(
-                spatial_dims=3,
-                in_channels=input_dim,
-                out_channels=output_dim, # value and alpha
-                channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
-                strides=(2, 2, 2, 2),
-                num_res_units=2,
-                kernel_size=5,
-                up_kernel_size=5,
-                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
-                act=("elu", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout=0.5,
-            ), 
-            nn.Sigmoid()  
-        )
-
-    def forward(self, raw_data: torch.Tensor, factor=None, weight=0.0, is_deterministic=True) -> torch.Tensor:
-        B, C, D, H, W = raw_data.shape   
-
-        # values = raw_data
-        # alphas = self.vnet(raw_data)
-        # values = torch.ones_like(raw_data)
-        # alphas = self.vnet(raw_data)
-        concat = self.vnet( raw_data )
-        values = concat[:,[0],:,:,:] 
-        alphas = concat[:,[1],:,:,:]
-
-        features = torch.cat([values, alphas], dim=1) 
-        return features
 
 if __name__ == "__main__":
     parser = ArgumentParser()
