@@ -289,7 +289,7 @@ class CNNMapper(nn.Module):
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
-            nn.Tanh()  
+            nn.Sigmoid()  
         )
 
     def forward(self, raw_data: torch.Tensor, factor=None, weight=0.0, is_deterministic=True) -> torch.Tensor:
@@ -302,7 +302,7 @@ class CNNMapper(nn.Module):
         # concat = self.vnet( raw_data ) / 2.0 + 0.5
         # values = concat[:,[0],:,:,:] 
         # alphas = concat[:,[1],:,:,:]
-        values = self.vnet( raw_data ) / 2.0 + 0.5
+        values = self.vnet( raw_data )
         alphas = torch.ones_like(values)._requires_grad_(False)
 
         features = torch.cat([values, alphas], dim=1) 
