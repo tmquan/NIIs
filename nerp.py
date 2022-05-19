@@ -330,7 +330,7 @@ class NeRPLightningModule(LightningModule):
 
         self.mapper = CNNMapper(
             input_dim = 1,
-            output_dim = 2,
+            output_dim = 1,
         )
 
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
