@@ -125,7 +125,7 @@ class CustomDataModule(LightningDataModule):
     def setup(self, seed: int=2222, stage: Optional[str]=None):
         # make assignments here (val/train/test split)
         # called on every process in DDP
-        set_determinism(seed=2222)
+        set_determinism(seed=seed)
 
     def train_dataloader(self):
         self.train_transforms = Compose(

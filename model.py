@@ -8,7 +8,7 @@ import torchvision
 from argparse import ArgumentParser
 
 import typing
-from typing import Optional, Tuple, Type, Sequence, Union
+from typing import Optional, Tuple, Type, Sequence, Union, Dict
 
 from monai.networks.blocks.convolutions import Convolution, ResidualUnit
 from monai.networks.blocks import Upsample
@@ -75,17 +75,32 @@ cam_bw = {
     "fov": 20.,
     "aspect_ratio": 0.1
 }
+
 def init_random_cameras(
-    cam_type: typing.Type[CamerasBase], batch_size: int, random: bool = False
+    cam_type: typing.Type[CamerasBase], 
+    batch_size: int, 
+    random: bool = False, 
+    cam_mu: Dict = cam_mu, 
+    cam_bw: Dict = cam_bw, 
+    cam_ft: torch.Tensor = None,
 ):
+    if cam_ft is not None:
+        assert cam_ft.shape[0] == batch_size
+        dist = cam_ft[:, 0] * cam_bw["dist"] + cam_mu["dist"]
+        elev = cam_ft[:, 1] * cam_bw["elev"] + cam_mu["elev"]
+        azim = cam_ft[:, 2] * cam_bw["azim"] + cam_mu["azim"]
+    else:
+        dist = torch.Tensor(batch_size).uniform_(cam_mu["dist"] - cam_bw["dist"], cam_mu["dist"] + cam_bw["dist"]) if random else cam_mu["dist"]
+        elev = torch.Tensor(batch_size).uniform_(cam_mu["elev"] - cam_bw["elev"], cam_mu["elev"] + cam_bw["elev"]) if random else cam_mu["elev"]
+        azim = torch.Tensor(batch_size).uniform_(cam_mu["azim"] - cam_bw["azim"], cam_mu["azim"] + cam_bw["azim"]) if random else cam_mu["azim"]
+
     cam_params = {}
     # T = torch.randn(batch_size, 3) * 0.03
     # if not random:
     #     T[:, 2] = 4
     # R = so3_exp_map(torch.randn(batch_size, 3) * 3.0)
-    dist = torch.randn(batch_size) * cam_bw["dist"] + cam_mu["dist"] if random else cam_mu["dist"]
-    elev = torch.randn(batch_size) * cam_bw["elev"] + cam_mu["elev"] if random else cam_mu["elev"]
-    azim = torch.randn(batch_size) * cam_bw["azim"] + cam_mu["azim"] if random else cam_mu["azim"]
+
+
     R, T = look_at_view_transform(dist, elev, azim, degrees=True)
 
     cam_params = {"R": R, "T": T}
@@ -108,8 +123,13 @@ def init_random_cameras(
         
         if cam_type == FoVPerspectiveCameras:
             # cam_params["fov"] = torch.rand(batch_size) * 60 + 30
-            cam_params["fov"] = torch.randn(batch_size) * cam_bw["fov"] + cam_mu["fov"] if random else cam_mu["fov"]
-            cam_params["aspect_ratio"] = torch.randn(batch_size) * cam_bw["aspect_ratio"] + cam_mu["aspect_ratio"] if random else cam_mu["aspect_ratio"]
+            if cam_ft is not None:
+                assert cam_ft.shape[0] == batch_size
+                cam_params["fov"] = cam_ft[:, 3] * cam_bw["fov"] + cam_mu["fov"]
+                cam_params["aspect_ratio"] = cam_ft[:, 4] * cam_bw["aspect_ratio"] + cam_mu["aspect_ratio"]
+            else:
+                cam_params["fov"] = torch.Tensor(batch_size).uniform_(cam_mu["fov"] - cam_bw["fov"], cam_mu["fov"] + cam_bw["fov"]) if random else cam_mu["fov"]
+                cam_params["aspect_ratio"] = torch.Tensor(batch_size).uniform_(cam_mu["aspect_ratio"] - cam_bw["aspect_ratio"], cam_mu["aspect_ratio"] + cam_bw["aspect_ratio"]) if random else cam_mu["aspect_ratio"]    
         else:
             cam_params["max_y"] = torch.rand(batch_size) * 0.2 + 0.9
             cam_params["min_y"] = -(torch.rand(batch_size)) * 0.2 - 0.9
