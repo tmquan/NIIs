@@ -274,9 +274,13 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()  
         )
 
-        self.camera_net = torchvision.models.densenet121(pretrained=False)
-        self.camera_net.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.camera_net.classifier = nn.Linear(1024, 6)
+        nn_densenet121 = torchvision.models.densenet121(pretrained=True)
+        nn_densenet121.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        nn_densenet121.classifier = nn.Linear(1024, 6)
+        self.camera_net = nn.Sequential(
+            nn_densenet121,
+            nn.Sigmoid()  
+        )
 
         self.l1loss = nn.L1Loss()
         
@@ -294,14 +298,14 @@ class NeRVLightningModule(LightningModule):
         return self.volume_net(image2d_repeat)
     
     def forward_camera(self, image2d: torch.Tensor):
-        return self.camera_net(image2d)
+        return self.camera_net(image2d) * 2. - 1. # [0, 1] -> [-1, 1]
     
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         image3d = batch["image3d"]
         image2d = batch["image2d"]
         
-        # Generate variational camera
+        # Generate deterministic cameras
         varcams_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
 
         with torch.no_grad():
@@ -312,18 +316,29 @@ class NeRVLightningModule(LightningModule):
                                                cam_ft=varcams_feat, 
                                                random=True).to(image3d.device)
 
+
         # Three-way cycle consistent loss
         varcams_im2d = self.forward_screen(image3d, self.varcams)
-        varcams_pred = self.forward_camera(varcams_im2d)
+        # varcams_pred = self.forward_camera(varcams_im2d)
+        estcams_feat = self.forward_camera(varcams_im2d)
+        estcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                      batch_size=self.batch_size,
+                                      cam_mu=cam_mu,
+                                      cam_bw=cam_bw,
+                                      cam_ft=estcams_feat, 
+                                      random=True).to(image3d.device)
+        estcams_im2d = self.forward_screen(image3d, estcams)
         varcams_im3d = self.forward_volume(varcams_im2d)
 
-        varcams_loss = self.l1loss(varcams_pred, varcams_feat)
-        varim3d_loss = self.l1loss(varcams_im3d, image3d)
+        im2d_loss = self.l1loss(varcams_im2d, estcams_im2d)
+        im3d_loss = self.l1loss(varcams_im3d, image3d)
+        cams_loss = self.l1loss(estcams_feat, varcams_feat)
 
-        self.log(f'{stage}_cam_loss', varcams_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_vol_loss', varim3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
                 
-        info = {'loss': varcams_loss + varim3d_loss}
+        info = {'loss': im2d_loss + im3d_loss + cams_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -342,14 +357,26 @@ class NeRVLightningModule(LightningModule):
 
         # Three-way cycle consistent loss
         detcams_im2d = self.forward_screen(image3d, self.detcams)
-        detcams_pred = self.forward_camera(detcams_im2d)
+        # detcams_pred = self.forward_camera(detcams_im2d)
+        estcams_feat = self.forward_camera(detcams_im2d)
+        estcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                      batch_size=self.batch_size,
+                                      cam_mu=cam_mu,
+                                      cam_bw=cam_bw,
+                                      cam_ft=estcams_feat, 
+                                      random=True).to(image3d.device)
+        estcams_im2d = self.forward_screen(image3d, estcams)
         detcams_im3d = self.forward_volume(detcams_im2d)
 
-        detcams_loss = self.l1loss(detcams_pred, detcams_feat)
-        detim3d_loss = self.l1loss(detcams_im3d, image3d)
+        im2d_loss = self.l1loss(detcams_im2d, estcams_im2d)
+        im3d_loss = self.l1loss(detcams_im3d, image3d)
+        cams_loss = self.l1loss(estcams_feat, detcams_feat)
 
-        self.log(f'{stage}_cam_loss', detcams_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_vol_loss', detim3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
+                
+        info = {'loss': im2d_loss + im3d_loss + cams_loss}
 
         reconst_im3d = self.forward_volume(image2d)
         if batch_idx == 0:
@@ -357,6 +384,7 @@ class NeRVLightningModule(LightningModule):
                 viz = torch.cat([image3d[...,128], 
                                  detcams_im3d[...,128], 
                                  detcams_im2d,
+                                 estcams_im2d,
                                  image2d], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
@@ -366,7 +394,7 @@ class NeRVLightningModule(LightningModule):
                                                     detcams_im3d, 
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-        info = {'loss': detcams_loss + detim3d_loss}
+        info = {'loss': im2d_loss + im3d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
