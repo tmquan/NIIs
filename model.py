@@ -462,7 +462,7 @@ class CNNMapper(nn.Module):
                 # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
                 act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
             ), 
             nn.Sigmoid()  
         )

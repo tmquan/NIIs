@@ -25,7 +25,7 @@ from data import *
 class PerceptualLoss(LearnedPerceptualImagePatchSimilarity):
     """The Learned Perceptual Image Patch Similarity (`LPIPS_`) is used to judge the perceptual similarity between
     two images. LPIPS essentially computes the similarity between the activations of two image patches for some
-    pre-defined network. This measure has been shown to match human perseption well. A low LPIPS score means that
+    pre-defined network. This measure has been shown to match human perception well. A low LPIPS score means that
     image patches are perceptually similar.
     """
     def __init__(self, 
@@ -128,8 +128,8 @@ class NeRPLightningModule(LightningModule):
             ),
         )
         
-        # self.gen.apply(_weights_init)
-        # self.discrim.apply(_weights_init)
+        self.gen.apply(_weights_init)
+        self.discrim.apply(_weights_init)
         self.l1loss = nn.L1Loss()
         self.ptloss = PerceptualLoss(net_type='vgg')
 
@@ -236,7 +236,7 @@ class NeRPLightningModule(LightningModule):
                     # plot_2d_or_3d_image(data=mapped_[:,[1]], tag=f'{stage}_mapped_1', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
             if self.gamma > 0:
-                r_loss =  self.l1loss(mapped_[:,[0]], image3d)   
+                r_loss = self.l1loss(mapped_[:,[0]], image3d) #+ self.l1loss(mapped_[:,[1]], torch.ones_like(image3d))
                 self.log(f'{stage}_r_loss', r_loss, on_step=True, prog_bar=True, logger=True)
                 g_loss += self.gamma * r_loss
             if self.kappa > 0:
@@ -327,8 +327,8 @@ class NeRPLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_g = torch.optim.Adam(self.gen.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        opt_d = torch.optim.Adam(self.discrim.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt_g = torch.optim.RAdam(self.gen.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt_d = torch.optim.RAdam(self.discrim.parameters(), lr=1e0*(self.lr or self.learning_rate))
 
         return opt_g, opt_d
 
