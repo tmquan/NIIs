@@ -306,21 +306,21 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        varcams_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+        cameras_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
 
         with torch.no_grad():
             self.varcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                                batch_size=self.batch_size, 
                                                cam_mu=cam_mu,
                                                cam_bw=cam_bw,
-                                               cam_ft=varcams_feat, 
+                                               cam_ft=cameras_feat, 
                                                random=True).to(image3d.device)
 
 
         # Three-way cycle consistent loss
-        varcams_im2d = self.forward_screen(image3d, self.varcams)
-        # varcams_pred = self.forward_camera(varcams_im2d)
-        estcams_feat = self.forward_camera(varcams_im2d)
+        cameras_im2d = self.forward_screen(image3d, self.varcams)
+        # cameras_pred = self.forward_camera(cameras_im2d)
+        estcams_feat = self.forward_camera(cameras_im2d)
         estcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                       batch_size=self.batch_size,
                                       cam_mu=cam_mu,
@@ -328,62 +328,22 @@ class NeRVLightningModule(LightningModule):
                                       cam_ft=estcams_feat, 
                                       random=True).to(image3d.device)
         estcams_im2d = self.forward_screen(image3d, estcams)
-        varcams_im3d = self.forward_volume(varcams_im2d)
+        cameras_im3d = self.forward_volume(cameras_im2d)
 
-        im2d_loss = self.l1loss(varcams_im2d, estcams_im2d)
-        im3d_loss = self.l1loss(varcams_im3d, image3d)
-        cams_loss = self.l1loss(estcams_feat, varcams_feat)
-
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
-                
-        info = {'loss': im2d_loss + im3d_loss + cams_loss}
-        return info     
-
-    def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
-        image3d = batch["image3d"]
-        image2d = batch["image2d"]        
-        # Generate deterministic cameras
-        detcams_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
-
-        with torch.no_grad():
-            self.detcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                               batch_size=self.batch_size, 
-                                               cam_mu=cam_mu,
-                                               cam_bw=cam_bw,
-                                               cam_ft=detcams_feat, 
-                                               random=True).to(image3d.device)
-
-        # Three-way cycle consistent loss
-        detcams_im2d = self.forward_screen(image3d, self.detcams)
-        # detcams_pred = self.forward_camera(detcams_im2d)
-        estcams_feat = self.forward_camera(detcams_im2d)
-        estcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                      batch_size=self.batch_size,
-                                      cam_mu=cam_mu,
-                                      cam_bw=cam_bw,
-                                      cam_ft=estcams_feat, 
-                                      random=True).to(image3d.device)
-        estcams_im2d = self.forward_screen(image3d, estcams)
-        detcams_im3d = self.forward_volume(detcams_im2d)
-
-        im2d_loss = self.l1loss(detcams_im2d, estcams_im2d)
-        im3d_loss = self.l1loss(detcams_im3d, image3d)
-        cams_loss = self.l1loss(estcams_feat, detcams_feat)
+        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d)
+        im3d_loss = self.l1loss(cameras_im3d, image3d)
+        cams_loss = self.l1loss(estcams_feat, cameras_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
-                
-        info = {'loss': im2d_loss + im3d_loss + cams_loss}
-
+         
         reconst_im3d = self.forward_volume(image2d)
         if batch_idx == 0:
             with torch.no_grad():
                 viz = torch.cat([image3d[...,128], 
-                                 detcams_im3d[...,128], 
-                                 detcams_im2d,
+                                 cameras_im3d[...,128], 
+                                 cameras_im2d,
                                  estcams_im2d,
                                  image2d], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
@@ -391,10 +351,65 @@ class NeRVLightningModule(LightningModule):
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
 
                 plot_2d_or_3d_image(data=torch.cat([image3d, 
-                                                    detcams_im3d, 
+                                                    cameras_im3d, 
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-        info = {'loss': im2d_loss + im3d_loss}
+
+        info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
+        return info     
+
+    def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
+        image3d = batch["image3d"]
+        image2d = batch["image2d"]        
+        # Generate deterministic cameras
+        cameras_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+
+        with torch.no_grad():
+            self.detcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                               batch_size=self.batch_size, 
+                                               cam_mu=cam_mu,
+                                               cam_bw=cam_bw,
+                                               cam_ft=cameras_feat, 
+                                               random=True).to(image3d.device)
+
+        # Three-way cycle consistent loss
+        cameras_im2d = self.forward_screen(image3d, self.detcams)
+        # cameras_pred = self.forward_camera(cameras_im2d)
+        estcams_feat = self.forward_camera(cameras_im2d)
+        estcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                      batch_size=self.batch_size,
+                                      cam_mu=cam_mu,
+                                      cam_bw=cam_bw,
+                                      cam_ft=estcams_feat, 
+                                      random=True).to(image3d.device)
+        estcams_im2d = self.forward_screen(image3d, estcams)
+        cameras_im3d = self.forward_volume(cameras_im2d)
+
+        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d)
+        im3d_loss = self.l1loss(cameras_im3d, image3d)
+        cams_loss = self.l1loss(estcams_feat, cameras_feat)
+
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
+
+        reconst_im3d = self.forward_volume(image2d)
+        if batch_idx == 0:
+            with torch.no_grad():
+                viz = torch.cat([image3d[...,128], 
+                                 cameras_im3d[...,128], 
+                                 cameras_im2d,
+                                 estcams_im2d,
+                                 image2d], dim=-1)
+                grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
+                tensorboard = self.logger.experiment
+                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
+
+                plot_2d_or_3d_image(data=torch.cat([image3d, 
+                                                    cameras_im3d, 
+                                                    reconst_im3d], dim=-2), 
+                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+        info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
         return info
 
     def validation_step(self, batch, batch_idx):

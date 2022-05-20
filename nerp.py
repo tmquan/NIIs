@@ -18,6 +18,7 @@ from kornia.color import GrayscaleToRgb
 from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
+from monai.networks.nets import UNet
 
 from model import *
 from data import *
@@ -215,36 +216,47 @@ class NeRPDataModule(LightningDataModule):
         )
         return self.val_loader
 
-class PerceptualLoss(LearnedPerceptualImagePatchSimilarity):
-    """The Learned Perceptual Image Patch Similarity (`LPIPS_`) is used to judge the perceptual similarity between
-    two images. LPIPS essentially computes the similarity between the activations of two image patches for some
-    pre-defined network. This measure has been shown to match human perception well. A low LPIPS score means that
-    image patches are perceptually similar.
-    """
-    def __init__(self, 
-        net_type: str = "vgg",
-        *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.metric_name = 'ptloss' 
-        self.net_type = net_type
-        print(f"Using {self.net_type}")
-        if self.net_type == "vgg":
-            self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            self.gray2rgb = GrayscaleToRgb()
+class VGGPerceptualLoss(torch.nn.Module):
+    def __init__(self, resize=True):
+        super(VGGPerceptualLoss, self).__init__()
+        blocks = []
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[:4].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[4:9].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[9:16].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[16:23].eval())
+        for bl in blocks:
+            for p in bl.parameters():
+                p.requires_grad = False
+        self.blocks = torch.nn.ModuleList(blocks)
+        self.transform = torch.nn.functional.interpolate
+        self.resize = resize
+        self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
-    def forward(self, source, target):
-        if source.shape[1] == 1:
-            source = self.gray2rgb(source)
-        if target.shape[1] == 1:
-            target = self.gray2rgb(target)
-        # if self.net_type == "vgg":
-        #     source = self.normalize(source)
-        #     target = self.normalize(target)
-        # source range from 0~1, change to -1~1
-        source = source * 2 - 1
-        target = target * 2 - 1
-
-        return super().forward(source, target)
+    def forward(self, source, target, feature_layers=[0, 1, 2, 3], style_layers=[]):
+        if source.shape[1] != 3:
+            source = source.repeat(1, 3, 1, 1)
+            target = target.repeat(1, 3, 1, 1)
+        source = (source-self.mean) / self.std
+        target = (target-self.mean) / self.std
+        if self.resize:
+            source = self.transform(source, mode='bilinear', size=(224, 224), align_corners=False)
+            target = self.transform(target, mode='bilinear', size=(224, 224), align_corners=False)
+        loss = 0.0
+        x = source
+        y = target
+        for i, block in enumerate(self.blocks):
+            x = block(x)
+            y = block(y)
+            if i in feature_layers:
+                loss += torch.nn.functional.l1_loss(x, y)
+            if i in style_layers:
+                act_x = x.reshape(x.shape[0], x.shape[1], -1)
+                act_y = y.reshape(y.shape[0], y.shape[1], -1)
+                gram_x = act_x @ act_x.permute(0, 2, 1)
+                gram_y = act_y @ act_y.permute(0, 2, 1)
+                loss += torch.nn.functional.l1_loss(gram_x, gram_y)
+        return loss
 
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
@@ -254,7 +266,7 @@ def _weights_init(m):
         torch.nn.init.constant_(m.bias, 0)
 
 cam_mu = {
-    "dist": 3.7,
+    "dist": 3.0,
     "elev": 0.0,
     "azim": 0.0,
     "fov": 60.,
@@ -284,7 +296,6 @@ class CNNMapper(nn.Module):
                 num_res_units=2,
                 kernel_size=5,
                 up_kernel_size=5,
-                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
                 act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
@@ -303,7 +314,7 @@ class CNNMapper(nn.Module):
         # values = concat[:,[0],:,:,:] 
         # alphas = concat[:,[1],:,:,:]
         values = self.vnet( raw_data )
-        alphas = torch.ones_like(values)._requires_grad_(False)
+        alphas = torch.ones_like(values)
 
         features = torch.cat([values, alphas], dim=1) 
         return features
@@ -369,17 +380,16 @@ class NeRPLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=5,
                 up_kernel_size=5,
-                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
                 act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
             ),
         )
         
-        self.gen.apply(_weights_init)
-        self.discrim.apply(_weights_init)
+        # self.gen.apply(_weights_init)
+        # self.discrim.apply(_weights_init)
         self.l1loss = nn.L1Loss()
-        self.ptloss = PerceptualLoss(net_type='vgg')
+        self.ptloss = VGGPerceptualLoss() #PerceptualLoss(net_type='vgg')
 
     def discrim_step(self, fake_images: torch.Tensor, real_images: torch.Tensor, 
                      batch_idx: int, stage: Optional[str]='train', weight: float=1.0):
@@ -418,10 +428,9 @@ class NeRPLightningModule(LightningModule):
 
         # Create a volume with xray effect and pass to the renderer
         volumes = Volumes(
-            features = torch.cat([image3d]*3, dim=1),
-            densities = mapped_data[:,[1]] * self.theta, #image3d / 512., 
-            #torch.ones_like(image3d) / 512., # modify here
-            voxel_size = 3.2 / self.shape,
+            features = torch.cat([mapped_data[:,[0]]]*3, dim=1),
+            densities = mapped_data[:,[1]] * self.theta, #
+            voxel_size = 3.3 / self.shape,
         )
 
         viewed_data = self.gen[1].forward(volumes=volumes, cameras=cameras)
@@ -584,8 +593,8 @@ class NeRPLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_g = torch.optim.RAdam(self.gen.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        opt_d = torch.optim.RAdam(self.discrim.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt_g = torch.optim.Adam(self.gen.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt_d = torch.optim.Adam(self.discrim.parameters(), lr=1e0*(self.lr or self.learning_rate))
 
         return opt_g, opt_d
 

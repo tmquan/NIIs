@@ -231,7 +231,7 @@ class CustomUNet(nn.Module):
         up_kernel_size: upsampling convolution kernel size, the value(s) should be odd. If sequence,
             its length should equal to dimensions. Defaults to 3.
         num_res_units: number of residual units. Defaults to 0.
-        # act: activation type and arguments. Defaults to PReLU.
+        act: activation type and arguments. Defaults to PReLU.
         norm: feature normalization type and arguments. Defaults to instance norm.
         dropout: dropout ratio. Defaults to no dropout.
         bias: whether to have a bias term in convolution blocks. Defaults to True.
@@ -427,18 +427,19 @@ class CustomUNet(nn.Module):
         #     conv_only=is_top and self.num_res_units == 0,
         #     is_transposed=True,
         # )
+
         conv = Upsample(
             spatial_dims=self.dimensions,
             in_channels=in_channels,
             out_channels=out_channels,
             scale_factor=2,
             size=None,
-            mode= "nontrainable", #"nontrainable", #"pixelshuffle", "deconv"
+            mode= "pixelshuffle", #"nontrainable", #"pixelshuffle", "deconv"
             pre_conv ="default",
             interp_mode=InterpolateMode.LINEAR,
-            align_corners=True,
-            bias=True,
-            apply_pad_pool=True,
+            align_corners=False,
+            bias=False,
+            apply_pad_pool=False,
         )
 
         if self.num_res_units > 0:
@@ -460,8 +461,9 @@ class CustomUNet(nn.Module):
         return conv
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.model(x)
-        return x
+            x = self.model(x)
+            return x
+
 
 
 if __name__ == "__main__":
