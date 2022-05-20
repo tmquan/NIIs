@@ -260,9 +260,9 @@ class VGGPerceptualLoss(torch.nn.Module):
 
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
-        torch.nn.init.normal_(m.weight, 0.0, 0.04)
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
     if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm3d)):
-        torch.nn.init.normal_(m.weight, 0.0, 0.04)
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
         torch.nn.init.constant_(m.bias, 0)
 
 cam_mu = {
@@ -287,7 +287,7 @@ class CNNMapper(nn.Module):
     ): 
         super().__init__()
         self.vnet = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=input_dim,
                 out_channels=output_dim, # value and alpha
@@ -371,7 +371,7 @@ class NeRPLightningModule(LightningModule):
         )
 
         self.discrim = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=1, # value and alpha
@@ -388,6 +388,7 @@ class NeRPLightningModule(LightningModule):
         
         # self.gen.apply(_weights_init)
         # self.discrim.apply(_weights_init)
+
         self.l1loss = nn.L1Loss()
         self.ptloss = VGGPerceptualLoss() #PerceptualLoss(net_type='vgg')
 
