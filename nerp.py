@@ -19,6 +19,7 @@ from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
 from monai.networks.nets import UNet
+from monai.losses import DiceLoss
 
 from model import *
 from data import *
@@ -119,7 +120,7 @@ class NeRPDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
                 RandScaleCropd(keys=["image3d"], 
                                roi_scale=(0.9, 0.9, 0.8), 
-                               max_roi_scale=(1.0, 1.0, 0.8), 
+                               max_roi_scale=(1.1, 1.1, 1.1), 
                                random_center=True, 
                                random_size=True),
                 RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
@@ -287,18 +288,18 @@ class CNNMapper(nn.Module):
     ): 
         super().__init__()
         self.vnet = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=3,
-                in_channels=input_dim,
-                out_channels=output_dim, # value and alpha
+                in_channels=1,
+                out_channels=2, # value and alpha
                 channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=5,
                 up_kernel_size=5,
-                act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # act=("elu", {"inplace": True}),
+                # dropout=0.5,
             ), 
             nn.Sigmoid()  
         )
@@ -310,11 +311,12 @@ class CNNMapper(nn.Module):
         # alphas = self.vnet(raw_data)
         # values = torch.ones_like(raw_data)
         # alphas = self.vnet(raw_data)
-        # concat = self.vnet( raw_data ) / 2.0 + 0.5
-        # values = concat[:,[0],:,:,:] 
-        # alphas = concat[:,[1],:,:,:]
-        values = self.vnet( raw_data )
-        alphas = torch.ones_like(values)
+        concat = self.vnet( raw_data ) # / 2.0 + 0.5
+        values = concat[:,[0],:,:,:] 
+        alphas = concat[:,[1],:,:,:]
+
+        # values = self.vnet( raw_data )
+        # alphas = torch.ones_like(values)
 
         features = torch.cat([values, alphas], dim=1) 
         return features
@@ -339,17 +341,14 @@ class NeRPLightningModule(LightningModule):
         self.delta = hparams.delta
         self.save_hyperparameters()
 
-        self.mapper = CNNMapper(
-            input_dim = 1,
-            output_dim = 1,
-        )
+        self.mapper = CNNMapper()
 
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
             n_pts_per_ray = self.shape * 2,
             min_depth = 0.001,
-            max_depth = 4.0,
+            max_depth = 4.5,
         )
 
         self.raymarcher = EmissionAbsorptionRaymarcher()
@@ -371,7 +370,7 @@ class NeRPLightningModule(LightningModule):
         )
 
         self.discrim = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=1, # value and alpha
@@ -380,23 +379,23 @@ class NeRPLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=5,
                 up_kernel_size=5,
-                act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # act=("elu", {"inplace": True}),
+                # dropout=0.5,
             ),
+            # nn.Sigmoid(),
         )
         
         # self.gen.apply(_weights_init)
         # self.discrim.apply(_weights_init)
-
         self.l1loss = nn.L1Loss()
+        # self.dcloss = DiceLoss()
         self.ptloss = VGGPerceptualLoss() #PerceptualLoss(net_type='vgg')
 
     def discrim_step(self, fake_images: torch.Tensor, real_images: torch.Tensor, 
                      batch_idx: int, stage: Optional[str]='train', weight: float=1.0):
         real_logits = self.discrim(real_images) 
         fake_logits = self.discrim(fake_images) 
-
         # Log to tensorboard
         if batch_idx == 0:
             with torch.no_grad():
@@ -404,15 +403,34 @@ class NeRPLightningModule(LightningModule):
                 grid = torchvision.utils.make_grid(viz, normalize=True, scale_each=True, nrow=2, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_real_fake', grid, self.current_epoch) #*self.batch_size + batch_idx)
-
+        # ___1_logits = torch.ones_like(real_images)
+        # ___0_logits = torch.zeros_like(fake_images)
+        # real_loss = self.dcloss(real_logits, ___1_logits)
+        # fake_loss = self.dcloss(fake_logits, ___0_logits)
+        # return real_loss + fake_loss 
+        # ___1_logits = torch.ones_like(real_images)
+        # ___0_logits = torch.zeros_like(fake_images)
+        # __01_logits = torch.cat([___0_logits, ___1_logits], dim=1)
+        # __10_logits = torch.cat([___1_logits, ___0_logits], dim=1)
+        # real_loss = self.dcloss(real_logits, __10_logits)
+        # fake_loss = self.dcloss(fake_logits, __01_logits)
+        # return real_loss + fake_loss 
         real_loss = F.softplus(-real_logits).mean() 
         fake_loss = F.softplus(+fake_logits).mean()
-
         return real_loss + fake_loss 
 
     def gen_step(self, fake_images: torch.Tensor, real_images: torch.Tensor, 
                  batch_idx: int, stage: Optional[str]='train', weight: float=1.0):
-        
+        # fake_logits = self.discrim(fake_images) 
+        # ___1_logits = torch.ones_like(real_images)
+        # fake_loss = self.dcloss(fake_logits, ___1_logits)
+        # return fake_loss
+        # fake_logits = self.discrim(fake_images)
+        # ___0_logits = torch.zeros_like(fake_images)
+        # ___1_logits = torch.ones_like(real_images)
+        # __10_logits = torch.cat([___1_logits, ___0_logits], dim=1)
+        # fake_loss = self.dcloss(fake_logits, __10_logits)
+        # return fake_loss
         fake_logits = self.discrim(fake_images) 
         fake_loss = F.softplus(-fake_logits).mean()
         return fake_loss 
@@ -434,7 +452,7 @@ class NeRPLightningModule(LightningModule):
             voxel_size = 3.3 / self.shape,
         )
 
-        viewed_data = self.gen[1].forward(volumes=volumes, cameras=cameras)
+        viewed_data = self.gen[1].forward(volumes=volumes, cameras=cameras, norm_type="normalized")
         direct_data = viewed_data.clone()
         return viewed_data, mapped_data, direct_data
 
@@ -522,6 +540,7 @@ class NeRPLightningModule(LightningModule):
                 d_loss += self.delta * d_grad
 
             info = {'loss': d_loss}
+            return info
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         image3d = batch["image3d"]

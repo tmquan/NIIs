@@ -1,4 +1,5 @@
 from math import degrees
+from cv2 import norm
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -162,7 +163,7 @@ class VolumeModel(nn.Module):
         # Store the renderer module as well.
         self._renderer = renderer
         
-    def forward(self, cameras, volumes):
+    def forward(self, cameras, volumes, norm_type="standardized"):
         # batch_size = cameras.R.shape[0]
 
         # # Convert the log-space values to the densities/colors
@@ -191,7 +192,11 @@ class VolumeModel(nn.Module):
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
         screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
         normalized = lambda x: (x - x.min())/(x.max() - x.min())
-        screen_RGB = normalized(screen_RGB)
+        standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
+        if norm_type == "normalized":
+            screen_RGB = normalized(screen_RGB)
+        elif norm_type == "standardized":
+            screen_RGB = normalized(standardized(screen_RGB))
         return screen_RGB
 
 class CustomUNet(nn.Module):
@@ -434,12 +439,12 @@ class CustomUNet(nn.Module):
             out_channels=out_channels,
             scale_factor=2,
             size=None,
-            mode= "pixelshuffle", #"nontrainable", #"pixelshuffle", "deconv"
+            mode= "nontrainable", #"nontrainable", #"pixelshuffle", "deconv"
             pre_conv ="default",
             interp_mode=InterpolateMode.LINEAR,
-            align_corners=False,
-            bias=False,
-            apply_pad_pool=False,
+            align_corners=True,
+            bias=True,
+            apply_pad_pool=True,
         )
 
         if self.num_res_units > 0:
@@ -463,8 +468,6 @@ class CustomUNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
             x = self.model(x)
             return x
-
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -623,4 +626,4 @@ if __name__ == "__main__":
     screens = volume_model(cameras=cameras, volumes=volumes)
 
     for idx in range(hparams.batch_size):
-        torchvision.utils.save_image(screens[idx,0,:,:].detach().cpu(), f'test_camera_{idx}.png')
+        torchvision.utils.save_image(screens[idx,0,:,:].detach().cpu(), f'test_camera_standardization_{idx}.png')
