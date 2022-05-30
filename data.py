@@ -16,7 +16,7 @@ from monai.transforms import (
     Compose, OneOf, 
     LoadImaged, Spacingd, Lambdad,
     Orientationd, DivisiblePadd, 
-    RandFlipd, RandZoomd, RandScaleCropd, 
+    RandFlipd, RandZoomd, RandScaleCropd, CropForegroundd,
     RandAffined,
     Resized, Rotate90d, 
     ScaleIntensityd,

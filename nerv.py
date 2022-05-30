@@ -7,6 +7,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.seed import seed_everything
+from sympy import re
 
 from torchmetrics.image import LearnedPerceptualImagePatchSimilarity
 
@@ -18,12 +19,13 @@ from kornia.color import GrayscaleToRgb
 from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
+from monai.networks.nets import UNet
+from monai.losses import DiceLoss
 
 from model import *
 from data import *
 
 class NeRVDataModule(LightningDataModule):
-# class CustomDataModule(LightningDataModule):
     def __init__(self, 
         train_image3d_folders: str = "path/to/folder", 
         train_image2d_folders: str = "path/to/folder", 
@@ -122,6 +124,8 @@ class NeRVDataModule(LightningDataModule):
                                random_center=True, 
                                random_size=True),
                 RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
+                CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
+                CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
@@ -190,6 +194,8 @@ class NeRVDataModule(LightningDataModule):
                 ScaleIntensityd(keys=["image3d"], 
                         minv=0.0,
                         maxv=1.0),
+                CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
+                CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
@@ -214,6 +220,28 @@ class NeRVDataModule(LightningDataModule):
             shuffle=True,
         )
         return self.val_loader
+
+def _weights_init(m):
+    if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
+    if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm3d)):
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
+        torch.nn.init.constant_(m.bias, 0)
+
+cam_mu = {
+    "dist": 3.0,
+    "elev": 0.0,
+    "azim": 0.0,
+    "fov": 60.,
+    "aspect_ratio": 1.0,
+}
+cam_bw = {
+    "dist": 0.3,
+    "elev": 20.,
+    "azim": 20.,
+    "fov": 20.,
+    "aspect_ratio": 0.1
+}
 
 # NeRPLightningModule
 class NeRVLightningModule(LightningModule):
@@ -240,7 +268,7 @@ class NeRVLightningModule(LightningModule):
             image_height = self.shape,
             n_pts_per_ray = self.shape * 2,
             min_depth = 0.001,
-            max_depth = 4.0,
+            max_depth = 4.5,
         )
 
         self.raymarcher = EmissionAbsorptionRaymarcher()
@@ -257,13 +285,13 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
-                channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=5,
                 up_kernel_size=5,
                 # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
@@ -291,15 +319,17 @@ class NeRVLightningModule(LightningModule):
             densities = torch.ones_like(image3d) / 512., 
             voxel_size = 3.2 / self.shape,
         )
-        return self.viewer(cameras=cameras, volumes=volumes)
+        screen = self.viewer(cameras=cameras, volumes=volumes)
+        return screen
 
     def forward_volume(self, image2d: torch.Tensor, cameras: Type[CamerasBase]=None):
         image2d_repeat = image2d.unsqueeze(-3).repeat(1, 1, self.shape, 1, 1)
-        return self.volume_net(image2d_repeat)
+        volume = self.volume_net(image2d_repeat)
+        return volume
     
     def forward_camera(self, image2d: torch.Tensor):
-        return self.camera_net(image2d) * 2. - 1. # [0, 1] -> [-1, 1]
-    
+        camera = self.camera_net(image2d) * 2. - 1. # [0, 1] -> [-1, 1]
+        return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         image3d = batch["image3d"]
@@ -329,8 +359,10 @@ class NeRVLightningModule(LightningModule):
                                       random=True).to(image3d.device)
         estcams_im2d = self.forward_screen(image3d, estcams)
         cameras_im3d = self.forward_volume(cameras_im2d)
-
-        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d)
+        varcams_im2d = self.forward_screen(cameras_im3d, self.varcams)
+        
+        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d) \
+                  + self.l1loss(cameras_im2d, varcams_im2d) 
         im3d_loss = self.l1loss(cameras_im3d, image3d)
         cams_loss = self.l1loss(estcams_feat, cameras_feat)
 
@@ -384,8 +416,10 @@ class NeRVLightningModule(LightningModule):
                                       random=True).to(image3d.device)
         estcams_im2d = self.forward_screen(image3d, estcams)
         cameras_im3d = self.forward_volume(cameras_im2d)
-
-        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d)
+        detcams_im2d = self.forward_screen(cameras_im3d, self.detcams)
+        
+        im2d_loss = self.l1loss(cameras_im2d, estcams_im2d) \
+                  + self.l1loss(cameras_im2d, detcams_im2d) 
         im3d_loss = self.l1loss(cameras_im3d, image3d)
         cams_loss = self.l1loss(estcams_feat, cameras_feat)
 
