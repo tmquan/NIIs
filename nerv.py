@@ -1,5 +1,5 @@
 import os
-
+import math 
 from argparse import ArgumentParser
 
 from pytorch_lightning import Trainer
@@ -294,17 +294,18 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=5,
                 up_kernel_size=5,
+                act=("ReLU", {"inplace": True}),
                 # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
-                act=("elu", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
+            # ReconNet(in_channels=1, out_channels=1),
             nn.Sigmoid()  
         )
 
         nn_densenet121 = torchvision.models.densenet121(pretrained=True)
         nn_densenet121.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        nn_densenet121.classifier = nn.Linear(1024, 6)
+        nn_densenet121.classifier = nn.Linear(1024, 5)
         self.camera_net = nn.Sequential(
             nn_densenet121,
             nn.Sigmoid()  
@@ -326,6 +327,8 @@ class NeRVLightningModule(LightningModule):
         image2d_repeat = image2d.unsqueeze(-3).repeat(1, 1, self.shape, 1, 1)
         volume = self.volume_net(image2d_repeat)
         return volume
+        # volume = self.volume_net(image2d)
+        # return volume
     
     def forward_camera(self, image2d: torch.Tensor):
         camera = self.camera_net(image2d) * 2. - 1. # [0, 1] -> [-1, 1]
@@ -336,7 +339,7 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        cameras_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+        cameras_feat = torch.Tensor(self.batch_size, 5).uniform_(-1.0, 1.0).to(image3d.device)
 
         with torch.no_grad():
             self.varcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
@@ -394,7 +397,7 @@ class NeRVLightningModule(LightningModule):
         image3d = batch["image3d"]
         image2d = batch["image2d"]        
         # Generate deterministic cameras
-        cameras_feat = torch.Tensor(self.batch_size, 6).uniform_(-1.0, 1.0).to(image3d.device)
+        cameras_feat = torch.Tensor(self.batch_size, 5).uniform_(-1.0, 1.0).to(image3d.device)
 
         with torch.no_grad():
             self.detcams = init_random_cameras(cam_type=FoVPerspectiveCameras, 
@@ -423,9 +426,9 @@ class NeRVLightningModule(LightningModule):
         im3d_loss = self.l1loss(cameras_im3d, image3d)
         cams_loss = self.l1loss(estcams_feat, cameras_feat)
 
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True)
 
         reconst_im3d = self.forward_volume(image2d)
         if batch_idx == 0:
