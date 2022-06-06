@@ -19,7 +19,7 @@ from kornia.color import GrayscaleToRgb
 from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
-from monai.networks.nets import UNet
+from monai.networks.nets import UNet, DenseNet121, DenseNet201
 from monai.losses import DiceLoss
 
 from model import *
@@ -303,15 +303,27 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()  
         )
 
-        nn_densenet121 = torchvision.models.densenet121(pretrained=True)
-        nn_densenet121.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        nn_densenet121.classifier = nn.Linear(1024, 5)
+        # nn_densenet121 = torchvision.models.densenet121(pretrained=True)
+        # nn_densenet121.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # nn_densenet121.classifier = nn.Linear(1024, 5)
+        # self.camera_net = nn.Sequential(
+        #     nn_densenet121,
+        #     nn.Sigmoid()  
+        # )
         self.camera_net = nn.Sequential(
-            nn_densenet121,
-            nn.Sigmoid()  
+            DenseNet201(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=5,
+                init_features=64, 
+                growth_rate=32, 
+                block_config=(6, 12, 64, 48), 
+                pretrained=True, 
+            ),
+            nn.Sigmoid()
         )
 
-        self.l1loss = nn.L1Loss()
+        self.l1loss = nn.L1Loss(reduction='sum')
         
     def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
@@ -395,7 +407,8 @@ class NeRVLightningModule(LightningModule):
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
+        # info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
+        info = {'loss': im3d_loss + im2d_loss + 1e6*cams_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -456,7 +469,8 @@ class NeRVLightningModule(LightningModule):
                                                     estim3d, 
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-        info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
+        # info = {'loss': 1e2*im3d_loss + 1e1*im2d_loss + 1e0*cams_loss}
+        info = {'loss': im3d_loss + im2d_loss + 1e6*cams_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -479,7 +493,7 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt = torch.optim.Adam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         return opt
 
 def test_random_uniform_cameras(hparams, datamodule):
