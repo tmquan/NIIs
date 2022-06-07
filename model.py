@@ -36,6 +36,7 @@ from pytorch3d.renderer.cameras import (
 )
 
 from pytorch3d.renderer import (
+    ray_bundle_to_ray_points, 
     RayBundle, 
     VolumeRenderer, 
     GridRaysampler, 
@@ -84,6 +85,7 @@ def init_random_cameras(
     cam_mu: Dict = cam_mu, 
     cam_bw: Dict = cam_bw, 
     cam_ft: torch.Tensor = None,
+    device: torch.device = torch.device("cpu"),
 ):
     if cam_ft is not None:
         assert cam_ft.shape[0] == batch_size
@@ -102,8 +104,9 @@ def init_random_cameras(
     # R = so3_exp_map(torch.randn(batch_size, 3) * 3.0)
 
 
-    R, T = look_at_view_transform(dist, elev, azim, degrees=True)
-
+    R, T = look_at_view_transform(dist, elev, azim, degrees=True, device=device)
+    R = R.to(cam_ft.dtype)
+    T = T.to(cam_ft.dtype)
     cam_params = {"R": R, "T": T}
     if cam_type in (OpenGLPerspectiveCameras, OpenGLOrthographicCameras):
         cam_params["znear"] = torch.rand(batch_size) * 10 + 0.1
