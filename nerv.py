@@ -312,7 +312,6 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            # nn.Conv2d(1, self.shape, kernel_size=7, stride=1, padding=3, bias=True),
             UNet(
                 spatial_dims=2,
                 in_channels=1,
@@ -320,14 +319,17 @@ class NeRVLightningModule(LightningModule):
                 channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
                 num_res_units=3,
-                kernel_size=3,
-                up_kernel_size=3,
+                kernel_size=5,
+                up_kernel_size=5,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
             nn.Sigmoid(),  
             View((-1, 1, self.shape, self.shape, self.shape)),
+        )
+
+        self.refine_net = nn.Sequential(
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -335,8 +337,8 @@ class NeRVLightningModule(LightningModule):
                 channels=(16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
                 num_res_units=3,
-                kernel_size=3,
-                up_kernel_size=3,
+                kernel_size=5,
+                up_kernel_size=5,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
@@ -345,17 +347,18 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.camera_net = nn.Sequential(
-            DenseNet121(
+            DenseNet201(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
                 pretrained=True, 
+                dropout_prob=0.5,
             ),
             nn.Sigmoid()
         )
 
         # self.l1loss = nn.L1Loss(reduction='sum')
-        self.loss = nn.HuberLoss(reduction='sum')
+        self.hbloss = nn.HuberLoss(reduction='sum', delta=1.0) # delta=1.0 mean SmoothL1Loss
         
     def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
@@ -368,10 +371,9 @@ class NeRVLightningModule(LightningModule):
         return screen, points
 
     def forward_volume(self, image2d: torch.Tensor, cameras: Type[CamerasBase]=None):
-        # image2d_repeat = image2d.unsqueeze(-3).repeat(1, 1, self.shape, 1, 1)
-        # volume = self.volume_net(image2d_repeat)
         volume = self.volume_net(image2d)
-        return volume
+        refine = self.refine_net(volume)
+        return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
         camera = self.camera_net(image2d) * 2. - 1. # [0, 1] -> [-1, 1]
@@ -396,7 +398,7 @@ class NeRVLightningModule(LightningModule):
 
         # Four-way cycle consistent loss
         orgcam_im2d, orgcam_rays = self.forward_screen(image3d, orgcam)
-        estim3d = self.forward_volume(orgcam_im2d)
+        estim3d, recon3d = self.forward_volume(orgcam_im2d)
         estcam_feat = self.forward_camera(orgcam_im2d)
         estcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                       batch_size=self.batch_size,
@@ -405,25 +407,25 @@ class NeRVLightningModule(LightningModule):
                                       cam_ft=estcam_feat, 
                                       random=True).to(image3d.device)
 
-        estcam_im2d, estcam_rays = self.forward_screen(estim3d, estcam)
+        estcam_im2d, estcam_rays = self.forward_screen(recon3d, estcam)
 
         
-        im2d_loss = self.loss(orgcam_im2d, estcam_im2d) 
+        im2d_loss = self.hbloss(orgcam_im2d, estcam_im2d) 
                   
-        im3d_loss = self.loss(estim3d, image3d)
-        cams_loss = self.loss(estcam_feat, estfeat)
-        rays_loss = self.loss(orgcam_rays, estcam_rays)
+        im3d_loss = self.hbloss(estim3d, image3d) + self.hbloss(recon3d, image3d)
+        cams_loss = self.hbloss(estcam_feat, estfeat)
+        rays_loss = self.hbloss(orgcam_rays, estcam_rays)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_rays_loss', rays_loss, on_step=True, prog_bar=True, logger=True)
          
-        reconst_im3d = self.forward_volume(image2d)
+        _, reconst_im3d = self.forward_volume(image2d)
         if batch_idx == 0:
             with torch.no_grad():
                 viz = torch.cat([image3d[...,128], 
-                                 estim3d[...,128], 
+                                 recon3d[...,128], 
                                  orgcam_im2d,
                                  estcam_im2d,
                                  image2d], dim=-1)
@@ -432,7 +434,7 @@ class NeRVLightningModule(LightningModule):
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
 
                 plot_2d_or_3d_image(data=torch.cat([image3d, 
-                                                    estim3d, 
+                                                    recon3d, 
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
@@ -456,7 +458,7 @@ class NeRVLightningModule(LightningModule):
 
         # Four-way cycle consistent loss
         orgcam_im2d, orgcam_rays = self.forward_screen(image3d, orgcam)
-        estim3d = self.forward_volume(orgcam_im2d)
+        estim3d, recon3d = self.forward_volume(orgcam_im2d)
         estcam_feat = self.forward_camera(orgcam_im2d)
         estcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                       batch_size=self.batch_size,
@@ -465,33 +467,32 @@ class NeRVLightningModule(LightningModule):
                                       cam_ft=estcam_feat, 
                                       random=True).to(image3d.device)
 
-        estcam_im2d, estcam_rays = self.forward_screen(estim3d, estcam)
+        estcam_im2d, estcam_rays = self.forward_screen(recon3d, estcam)
         
-        im2d_loss = self.loss(orgcam_im2d, estcam_im2d)
+        im2d_loss = self.hbloss(orgcam_im2d, estcam_im2d)
 
-        im3d_loss = self.loss(estim3d, image3d)
-        cams_loss = self.loss(estcam_feat, estfeat)
-        rays_loss = self.loss(orgcam_rays, estcam_rays)
+        im3d_loss = self.hbloss(estim3d, image3d) + self.hbloss(recon3d, image3d)
+        cams_loss = self.hbloss(estcam_feat, estfeat)
+        rays_loss = self.hbloss(orgcam_rays, estcam_rays)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_rays_loss', rays_loss, on_step=True, prog_bar=False, logger=True)
 
-        reconst_im3d = self.forward_volume(image2d)
+        _, reconst_im3d = self.forward_volume(image2d)
         if batch_idx == 0:
             with torch.no_grad():
                 viz = torch.cat([image3d[...,128], 
-                                 estim3d[...,128], 
+                                 recon3d[...,128], 
                                  orgcam_im2d,
                                  estcam_im2d,
                                  image2d], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
-
                 plot_2d_or_3d_image(data=torch.cat([image3d, 
-                                                    estim3d, 
+                                                    recon3d, 
                                                     reconst_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
