@@ -324,9 +324,9 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
-                # dropout=0.5,
+                dropout=0.5,
             ), 
+            nn.Sigmoid(),  
             View((-1, 1, self.shape, self.shape, self.shape)),
             UNet(
                 spatial_dims=3,
@@ -339,8 +339,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
-                # dropout=0.5,
+                dropout=0.5,
             ), 
             nn.Sigmoid()  
         )
