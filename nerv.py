@@ -312,7 +312,21 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            nn.Conv2d(1, self.shape, kernel_size=7, stride=1, padding=3, bias=True),
+            # nn.Conv2d(1, self.shape, kernel_size=7, stride=1, padding=3, bias=True),
+            UNet(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=self.shape, # value and alpha
+                channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                strides=(2, 2, 2, 2),
+                num_res_units=3,
+                kernel_size=3,
+                up_kernel_size=3,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                # act=("LeakyReLU", {"negative_slope": 0.2, "inplace": True}),
+                # dropout=0.5,
+            ), 
             View((-1, 1, self.shape, self.shape, self.shape)),
             UNet(
                 spatial_dims=3,
