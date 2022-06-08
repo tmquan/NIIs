@@ -319,8 +319,8 @@ class NeRVLightningModule(LightningModule):
                 channels=(32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
                 num_res_units=3,
-                kernel_size=5,
-                up_kernel_size=5,
+                kernel_size=3,
+                up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
@@ -337,8 +337,8 @@ class NeRVLightningModule(LightningModule):
                 channels=(16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2),
                 num_res_units=3,
-                kernel_size=5,
-                up_kernel_size=5,
+                kernel_size=3,
+                up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
@@ -347,7 +347,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.camera_net = nn.Sequential(
-            DenseNet201(
+            DenseNet121(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
