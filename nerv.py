@@ -459,8 +459,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': cams_loss + im3d_loss / 3.0 + im2d_loss}
-        # info = {'loss': 1e2*cams_loss + 1e3*im3d_loss + 1e4*im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -523,8 +522,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': cams_loss + im3d_loss + im2d_loss}
-        # info = {'loss': 1e2*cams_loss + 1e3*im3d_loss + 1e4*im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
