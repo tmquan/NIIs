@@ -50,9 +50,10 @@ class CustomDiceLoss(nn.Module):
         self.weight = weight
         self.smooth = smooth
     
-    def forward(self, estim, labels):
-        return DiceLoss()(torch.cat([torch.abs(estim-labels), 1-torch.abs(estim-labels)], 1), 
-                          torch.cat([torch.zeros_like(estim), torch.ones_like(estim)], 1))
+    def forward(self, source, target):
+        diff = torch.abs(source-target)
+        return DiceLoss()(torch.cat([diff, 1-diff], 0), 
+                          torch.cat([torch.zeros_like(diff), torch.ones_like(diff)], 0))
                 
 
 class NeRVDataModule(LightningDataModule):
@@ -430,10 +431,12 @@ class NeRVLightningModule(LightningModule):
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
-        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.l1loss(estim3d, recon3d) + self.l1loss(recon3d, image3d) \
-                  + self.l1loss(xr_est_im3d, xr_rec_im3d)
-        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
+        im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
+        im3d_loss = self.dcloss(estim3d, recon3d) \
+                  + self.dcloss(recon3d, image3d) \
+                  + self.dcloss(xr_est_im3d, xr_rec_im3d)
+        im3d_loss = im3d_loss / 3.0
+        cams_loss = self.dcloss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
@@ -455,7 +458,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': cams_loss + im3d_loss + im2d_loss}
+        info = {'loss': cams_loss + im3d_loss / 3.0 + im2d_loss}
         # info = {'loss': 1e2*cams_loss + 1e3*im3d_loss + 1e4*im2d_loss}
         return info     
 
@@ -492,10 +495,12 @@ class NeRVLightningModule(LightningModule):
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
-        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.l1loss(estim3d, recon3d) + self.l1loss(recon3d, image3d) \
-                  + self.l1loss(xr_est_im3d, xr_rec_im3d)
-        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
+        im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
+        im3d_loss = self.dcloss(estim3d, recon3d) \
+                  + self.dcloss(recon3d, image3d) \
+                  + self.dcloss(xr_est_im3d, xr_rec_im3d)
+        im3d_loss = im3d_loss / 3.0
+        cams_loss = self.dcloss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
@@ -691,7 +696,7 @@ if __name__ == "__main__":
     # Callback
     checkpoint_callback = ModelCheckpoint(
         dirpath=hparams.logsdir,
-        filename='{epoch:02d}-{validation_g_loss_epoch:.2f}-{validation_d_loss_epoch:.2f}',
+        filename='{epoch:02d}-{validation_loss_epoch:.2f}',
         save_top_k=-1,
         save_last=True,
         # monitor='validation_r_loss', 
