@@ -432,10 +432,11 @@ class NeRVLightningModule(LightningModule):
 
 
         im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.dcloss(estim3d, recon3d) \
-                  + self.dcloss(recon3d, image3d) \
-                  + self.dcloss(xr_est_im3d, xr_rec_im3d)
-        im3d_loss = im3d_loss / 3.0
+        im3d_loss = self.dcloss(recon3d, image3d) \
+                  + self.dcloss(xr_est_im3d, xr_rec_im3d) \
+                # + self.dcloss(estim3d, recon3d) \
+
+        im3d_loss = im3d_loss / 2.0
         cams_loss = self.dcloss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
@@ -496,10 +497,11 @@ class NeRVLightningModule(LightningModule):
 
 
         im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.dcloss(estim3d, recon3d) \
-                  + self.dcloss(recon3d, image3d) \
-                  + self.dcloss(xr_est_im3d, xr_rec_im3d)
-        im3d_loss = im3d_loss / 3.0
+        im3d_loss = self.dcloss(recon3d, image3d) \
+                  + self.dcloss(xr_est_im3d, xr_rec_im3d) \
+                # + self.dcloss(estim3d, recon3d) \
+
+        im3d_loss = im3d_loss / 2.0
         cams_loss = self.dcloss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
