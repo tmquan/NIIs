@@ -333,7 +333,7 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
@@ -351,7 +351,7 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
@@ -543,7 +543,7 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         return opt
 
 def test_random_uniform_cameras(hparams, datamodule):
