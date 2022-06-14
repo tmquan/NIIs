@@ -404,14 +404,13 @@ class NeRVLightningModule(LightningModule):
         # Generate deterministic cameras
         orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
 
-        with torch.no_grad():
-            orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                         batch_size=self.batch_size, 
-                                         cam_mu=cam_mu,
-                                         cam_bw=cam_bw,
-                                         cam_ft=orgcam_feat * 2. - 1., 
-                                         device=image3d.device,
-                                         random=True).to(image3d.device)
+        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                     batch_size=self.batch_size, 
+                                     cam_mu=cam_mu,
+                                     cam_bw=cam_bw,
+                                     cam_ft=orgcam_feat * 2. - 1., 
+                                     device=image3d.device,
+                                     random=True).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -426,7 +425,7 @@ class NeRVLightningModule(LightningModule):
                                      batch_size=self.batch_size,
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=estcam_feat * 2. - 1., 
+                                     cam_ft=xr_cam_feat * 2. - 1., 
                                      random=False).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
@@ -468,14 +467,13 @@ class NeRVLightningModule(LightningModule):
         # Generate deterministic cameras
         orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
 
-        with torch.no_grad():
-            orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                         batch_size=self.batch_size, 
-                                         cam_mu=cam_mu,
-                                         cam_bw=cam_bw,
-                                         cam_ft=orgcam_feat * 2. - 1., 
-                                         device=image3d.device,
-                                         random=True).to(image3d.device)
+        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                     batch_size=self.batch_size, 
+                                     cam_mu=cam_mu,
+                                     cam_bw=cam_bw,
+                                     cam_ft=orgcam_feat * 2. - 1., 
+                                     device=image3d.device,
+                                     random=True).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -490,7 +488,7 @@ class NeRVLightningModule(LightningModule):
                                       batch_size=self.batch_size,
                                       cam_mu=cam_mu,
                                       cam_bw=cam_bw,
-                                      cam_ft=estcam_feat * 2. - 1., 
+                                      cam_ft=xr_cam_feat * 2. - 1., 
                                       random=False).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
