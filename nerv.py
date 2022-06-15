@@ -324,7 +324,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=2,
                 in_channels=1+5,
                 out_channels=self.shape, # value and alpha
@@ -342,7 +342,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.refine_net = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
@@ -402,15 +402,16 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-
+        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
+        # orgcam_feat = torch.rand(self.batch_size, 5, device=image3d.device)
+        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
                                      cam_ft=orgcam_feat * 2. - 1., 
-                                     device=image3d.device,
-                                     random=True).to(image3d.device)
+                                     device=image3d.device).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -425,18 +426,17 @@ class NeRVLightningModule(LightningModule):
                                      batch_size=self.batch_size,
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=xr_cam_feat * 2. - 1., 
-                                     random=False).to(image3d.device)
+                                     cam_ft=xr_cam_feat * 2. - 1.).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
-        im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.dcloss(recon3d, image3d) \
-                  + self.dcloss(xr_est_im3d, xr_rec_im3d) \
-                # + self.dcloss(estim3d, recon3d) \
+        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
+        im3d_loss = self.l1loss(recon3d, image3d) \
+                  + self.l1loss(xr_est_im3d, xr_rec_im3d) \
+                # + self.l1loss(estim3d, recon3d) \
 
         im3d_loss = im3d_loss / 2.0
-        cams_loss = self.dcloss(orgcam_feat, estcam_feat)
+        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
@@ -458,22 +458,23 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 1e2*im3d_loss + im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         image3d = batch["image3d"]
         image2d = batch["image2d"]        
         # Generate deterministic cameras
-        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-
+        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
+        # orgcam_feat = torch.rand(self.batch_size, 5, device=image3d.device)
+        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
                                      cam_ft=orgcam_feat * 2. - 1., 
-                                     device=image3d.device,
-                                     random=True).to(image3d.device)
+                                     device=image3d.device).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -488,18 +489,17 @@ class NeRVLightningModule(LightningModule):
                                       batch_size=self.batch_size,
                                       cam_mu=cam_mu,
                                       cam_bw=cam_bw,
-                                      cam_ft=xr_cam_feat * 2. - 1., 
-                                      random=False).to(image3d.device)
+                                      cam_ft=xr_cam_feat * 2. - 1.).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
-        im2d_loss = self.dcloss(image2d, xr_est_im2d)    # self.dcloss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.dcloss(recon3d, image3d) \
-                  + self.dcloss(xr_est_im3d, xr_rec_im3d) \
-                # + self.dcloss(estim3d, recon3d) \
+        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
+        im3d_loss = self.l1loss(recon3d, image3d) \
+                  + self.l1loss(xr_est_im3d, xr_rec_im3d) \
+                # + self.l1loss(estim3d, recon3d) \
 
         im3d_loss = im3d_loss / 2.0
-        cams_loss = self.dcloss(orgcam_feat, estcam_feat)
+        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
@@ -520,7 +520,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 1e2*im3d_loss + im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -768,6 +768,14 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-1'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-2'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-3'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-4'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
     ]
     val_image2d_folders = [
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
