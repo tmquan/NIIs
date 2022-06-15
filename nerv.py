@@ -333,12 +333,13 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ELU", {"inplace": True}),
+                act=("ReLU", {"inplace": True}),
+                mode="pixelshuffle",
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
-            nn.Sigmoid(),  
             View((-1, 1, self.shape, self.shape, self.shape)),
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -351,7 +352,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ELU", {"inplace": True}),
+                act=("ReLU", {"inplace": True}),
+                mode="pixelshuffle",
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
@@ -369,8 +371,8 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
 
-        # self.volume_net.apply(_weights_init)
-        # self.refine_net.apply(_weights_init)
+        self.volume_net.apply(_weights_init)
+        self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
         self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
@@ -394,7 +396,7 @@ class NeRVLightningModule(LightningModule):
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) # [0, 1] -> [-1, 1]
+        camera = self.camera_net(image2d) # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
@@ -402,16 +404,14 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-        # orgcam_feat = torch.rand(self.batch_size, 5, device=image3d.device)
+        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
         orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-        
+
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat * 2. - 1., 
-                                     device=image3d.device).to(image3d.device)
+                                     cam_ft=orgcam_feat * 2. - 1.).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -444,8 +444,8 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([image3d[...,128], 
-                                 recon3d[...,128], 
+                viz = torch.cat([image3d[...,self.shape//2], 
+                                 recon3d[...,self.shape//2], 
                                  orgcam_im2d,
                                  image2d,
                                  xr_est_im2d], dim=-1)
@@ -458,23 +458,21 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + 1e2*im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 1e2*im3d_loss + 1e1*im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         image3d = batch["image3d"]
         image2d = batch["image2d"]        
         # Generate deterministic cameras
-        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-        # orgcam_feat = torch.rand(self.batch_size, 5, device=image3d.device)
+        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
         orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
         
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat * 2. - 1., 
-                                     device=image3d.device).to(image3d.device)
+                                     cam_ft=orgcam_feat * 2. - 1.).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -507,8 +505,8 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([image3d[...,128], 
-                                 recon3d[...,128], 
+                viz = torch.cat([image3d[...,self.shape//2], 
+                                 recon3d[...,self.shape//2], 
                                  orgcam_im2d,
                                  image2d,
                                  xr_est_im2d], dim=-1)
@@ -520,7 +518,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': 2*cams_loss + 1e2*im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 1e2*im3d_loss + 1e1*im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -729,13 +727,13 @@ if __name__ == "__main__":
     train_image3d_folders = [
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
 
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
@@ -744,6 +742,10 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-3'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-4'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/val/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
     ]
     train_label3d_folders = [
 
@@ -764,10 +766,15 @@ if __name__ == "__main__":
     ]
 
     val_image3d_folders = [
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
         os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
@@ -776,6 +783,10 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-3'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-4'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/val/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
     ]
     val_image2d_folders = [
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 

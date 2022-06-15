@@ -300,6 +300,7 @@ class CustomUNet(nn.Module):
         dropout: float = 0.0,
         bias: bool = True,
         dimensions: Optional[int] = None,
+        mode: str = "nontrainable",
     ) -> None:
 
         super().__init__()
@@ -332,9 +333,10 @@ class CustomUNet(nn.Module):
         self.norm = norm
         self.dropout = dropout
         self.bias = bias
+        self.mode = mode
 
         def _create_block(
-            inc: int, outc: int, channels: Sequence[int], strides: Sequence[int], is_top: bool
+            inc: int, outc: int, channels: Sequence[int], strides: Sequence[int], is_top: bool, mode: str
         ) -> nn.Sequential:
             """
             Builds the UNet structure from the bottom up by recursing down to the bottom block, then creating sequential
@@ -353,7 +355,7 @@ class CustomUNet(nn.Module):
             subblock: nn.Module
 
             if len(channels) > 2:
-                subblock = _create_block(c, c, channels[1:], strides[1:], False)  # continue recursion down
+                subblock = _create_block(c, c, channels[1:], strides[1:], False, mode)  # continue recursion down
                 upc = c * 2
             else:
                 # the next layer is the bottom so stop recursion, create the bottom layer as the sublock for this layer
@@ -361,11 +363,11 @@ class CustomUNet(nn.Module):
                 upc = c + channels[1]
 
             down = self._get_down_layer(inc, c, s, is_top)  # create layer in downsampling path
-            up = self._get_up_layer(upc, outc, s, is_top)  # create layer in upsampling path
+            up = self._get_up_layer(upc, outc, s, is_top, mode)  # create layer in upsampling path
 
             return nn.Sequential(down, SkipConnection(subblock), up)
 
-        self.model = _create_block(in_channels, out_channels, self.channels, self.strides, True)
+        self.model = _create_block(in_channels, out_channels, self.channels, self.strides, True, self.mode)
 
     def _get_down_layer(self, in_channels: int, out_channels: int, strides: int, is_top: bool) -> nn.Module:
         """
@@ -412,7 +414,7 @@ class CustomUNet(nn.Module):
         """
         return self._get_down_layer(in_channels, out_channels, 1, False)
 
-    def _get_up_layer(self, in_channels: int, out_channels: int, strides: int, is_top: bool) -> nn.Module:
+    def _get_up_layer(self, in_channels: int, out_channels: int, strides: int, is_top: bool, mode: str) -> nn.Module:
         """
         Args:
             in_channels: number of input channels.
@@ -422,33 +424,34 @@ class CustomUNet(nn.Module):
         """
         conv: Union[Convolution, nn.Sequential]
 
-        # conv = Convolution(
-        #     self.dimensions,
-        #     in_channels,
-        #     out_channels,
-        #     strides=strides,
-        #     kernel_size=self.up_kernel_size,
-        #     act=self.act,
-        #     norm=self.norm,
-        #     dropout=self.dropout,
-        #     bias=self.bias,
-        #     conv_only=is_top and self.num_res_units == 0,
-        #     is_transposed=True,
-        # )
-
-        conv = Upsample(
-            spatial_dims=self.dimensions,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            scale_factor=2,
-            size=None,
-            mode= "nontrainable", #"nontrainable", #"pixelshuffle", "deconv"
-            pre_conv ="default",
-            interp_mode=InterpolateMode.LINEAR,
-            align_corners=True,
-            bias=True,
-            apply_pad_pool=True,
-        )
+        if mode == "conv":
+            conv = Convolution(
+                self.dimensions,
+                in_channels,
+                out_channels,
+                strides=strides,
+                kernel_size=self.up_kernel_size,
+                act=self.act,
+                norm=self.norm,
+                dropout=self.dropout,
+                bias=self.bias,
+                conv_only=is_top and self.num_res_units == 0,
+                is_transposed=True,
+            )
+        elif mode == "deconv" or mode == "nontrainable" or mode == "pixelshuffle":
+            conv = Upsample(
+                spatial_dims=self.dimensions,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                scale_factor=2,
+                size=None,
+                mode=mode, #"nontrainable", "pixelshuffle", "deconv"
+                pre_conv ="default",
+                interp_mode=InterpolateMode.LINEAR,
+                align_corners=True,
+                bias=True,
+                apply_pad_pool=True,
+            )
 
         if self.num_res_units > 0:
             ru = ResidualUnit(
