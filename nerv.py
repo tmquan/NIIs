@@ -305,7 +305,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = self.shape * 2,
+            n_pts_per_ray = 400,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -333,9 +333,9 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                mode="pixelshuffle",
-                norm=Norm.BATCH,
+                mode="nontrainable",
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 dropout=0.5,
             ), 
             View((-1, 1, self.shape, self.shape, self.shape)),
@@ -352,9 +352,9 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                mode="pixelshuffle",
-                norm=Norm.BATCH,
+                mode="nontrainable",
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 dropout=0.5,
             ), 
             nn.Sigmoid()  
@@ -371,18 +371,18 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
 
-        self.volume_net.apply(_weights_init)
-        self.refine_net.apply(_weights_init)
+        # self.volume_net.apply(_weights_init)
+        # self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
-        self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
-        self.dcloss = CustomDiceLoss()
+        # self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
+        # self.dcloss = CustomDiceLoss()
 
     def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
         volumes = Volumes(
             features = torch.cat([image3d]*3, dim=1),
-            densities = torch.ones_like(image3d) / 512., 
+            densities = torch.ones_like(image3d) / 400, 
             voxel_size = 3.2 / self.shape,
         )
         screen = self.viewer(cameras=cameras, volumes=volumes)
