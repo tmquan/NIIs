@@ -1,0 +1,45 @@
+Collecting environment information...
+PyTorch version: 1.11.0+cu115
+Is debug build: False
+CUDA used to build PyTorch: 11.5
+ROCM used to build PyTorch: N/A
+
+OS: Ubuntu 20.04.2 LTS (x86_64)
+GCC version: (Ubuntu 9.4.0-1ubuntu1~20.04.1) 9.4.0
+Clang version: Could not collect
+CMake version: version 3.22.2
+Libc version: glibc-2.31
+
+Python version: 3.9.12 (main, Jun  1 2022, 11:38:51)  [GCC 7.5.0] (64-bit runtime)
+Python platform: Linux-5.13.0-44-generic-x86_64-with-glibc2.31
+Is CUDA available: True
+CUDA runtime version: Could not collect
+GPU models and configuration: 
+GPU 0: NVIDIA GeForce RTX 3090
+GPU 1: NVIDIA GeForce RTX 3080
+
+Nvidia driver version: 510.73.05
+cuDNN version: Could not collect
+HIP runtime version: N/A
+MIOpen runtime version: N/A
+
+Versions of relevant libraries:
+[pip3] numpy==1.20.0
+[pip3] pytorch-ignite==0.4.8
+[pip3] pytorch-lightning==1.6.4
+[pip3] pytorch3d==0.6.2
+[pip3] torch==1.11.0+cu115
+[pip3] torchaudio==0.11.0+rocm4.5.2
+[pip3] torchmetrics==0.9.0
+[pip3] torchvision==0.12.0+rocm4.5.2
+[conda] cudatoolkit               11.3.1               h2bc3f7f_2    anaconda
+[conda] cudnn                     8.2.1                cuda11.3_0    anaconda
+[conda] numpy                     1.20.0                   pypi_0    pypi
+[conda] numpy-base                1.16.6           py39h41b4c56_3  
+[conda] pytorch-ignite            0.4.8                    pypi_0    pypi
+[conda] pytorch-lightning         1.6.4                    pypi_0    pypi
+[conda] pytorch3d                 0.6.2                    pypi_0    pypi
+[conda] torch                     1.11.0+cu115             pypi_0    pypi
+[conda] torchaudio                0.11.0+rocm4.5.2          pypi_0    pypi
+[conda] torchmetrics              0.9.0                    pypi_0    pypi
+[conda] torchvision               0.12.0+rocm4.5.2          pypi_0    pypi

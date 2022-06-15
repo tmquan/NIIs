@@ -19,7 +19,7 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 # from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
-from monai.networks.nets import * #UNet, DenseNet121, DenseNet201
+from monai.networks.nets import *#UNet, DenseNet121, DenseNet201
 from monai.losses import DiceLoss
 
 from model import *
@@ -282,6 +282,49 @@ class View(nn.Module):
     def forward(self, x):
         return x.view(*self.shape)
 
+# Generator Code
+
+class Decoder(nn.Module):
+    def __init__(self, in_channels, out_channels, num_filters=32, use_batchnorm=True):
+        super(Decoder, self).__init__()
+        self.spread_net = nn.Sequential(
+            # input is Z, going into a convolution
+            nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(num_filters*64),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 4 x 4
+            nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters*32),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 8 x 8
+            nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters*16),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 16 x 16
+            nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters*8),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 32 x 32
+            nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters*4),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 64 x 64
+            nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters*2),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 128 x 128
+            nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(num_filters),
+            nn.LeakyReLU(True),
+            # state size. (num_filters*x) x 256 x 256
+            nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
+            # nn.Sigmoid()
+            # state size. (nc) x 64 x 64
+        )
+
+    def forward(self, input):
+        return self.spread_net(input)
+
 # NeRPLightningModule
 class NeRVLightningModule(LightningModule):
     def __init__(self, hparams, **kwargs):
@@ -326,20 +369,20 @@ class NeRVLightningModule(LightningModule):
         self.volume_net = nn.Sequential(
             CustomUNet(
                 spatial_dims=2,
-                in_channels=1+5,
+                in_channels=1+1,
                 out_channels=self.shape, # value and alpha
                 channels=(32, 64, 128, 256, 512, 1024), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="nontrainable",
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                mode="pixelshuffle",
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 dropout=0.5,
             ), 
             View((-1, 1, self.shape, self.shape, self.shape)),
-            nn.Sigmoid()  
+            # nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -352,9 +395,9 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="nontrainable",
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                mode="pixelshuffle",
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 dropout=0.5,
             ), 
             nn.Sigmoid()  
@@ -371,6 +414,14 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
 
+        self.spread_net = nn.Sequential(
+            Decoder(
+                in_channels=5,
+                out_channels=1,
+                num_filters=32,
+            ),
+            nn.Sigmoid()
+        )
         # self.volume_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         
@@ -388,9 +439,13 @@ class NeRVLightningModule(LightningModule):
         screen = self.viewer(cameras=cameras, volumes=volumes)
         return screen
 
-    def forward_volume(self, image2d: torch.Tensor, cameras: torch.Tensor):
-        concat = torch.cat([image2d, cameras.view(cameras.shape[0], 
-                                                  cameras.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
+    def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
+        # concat = torch.cat([image2d, camera_feat.view(camera_feat.shape[0], 
+        #                                           camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
+        expand = self.spread_net(camera_feat.view(camera_feat.shape[0], 
+                                               camera_feat.shape[1], 1, 1))
+        # print(expand.shape, image2d.shape)
+        concat = torch.cat([image2d, expand], dim=1)
         volume = self.volume_net(concat)
         refine = self.refine_net(volume)
         return volume, refine
@@ -411,7 +466,7 @@ class NeRVLightningModule(LightningModule):
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat * 2. - 1.).to(image3d.device)
+                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -426,7 +481,7 @@ class NeRVLightningModule(LightningModule):
                                      batch_size=self.batch_size,
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=xr_cam_feat * 2. - 1.).to(image3d.device)
+                                     cam_ft=xr_cam_feat*2. - 1.).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
@@ -458,7 +513,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + 1e2*im3d_loss + 1e1*im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -472,7 +527,7 @@ class NeRVLightningModule(LightningModule):
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
                                      cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat * 2. - 1.).to(image3d.device)
+                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
 
 
         # Four-way cycle consistent loss
@@ -487,7 +542,7 @@ class NeRVLightningModule(LightningModule):
                                       batch_size=self.batch_size,
                                       cam_mu=cam_mu,
                                       cam_bw=cam_bw,
-                                      cam_ft=xr_cam_feat * 2. - 1.).to(image3d.device)
+                                      cam_ft=xr_cam_feat*2. - 1.).to(image3d.device)
         xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
 
 
@@ -518,7 +573,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': 2*cams_loss + 1e2*im3d_loss + 1e1*im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -602,7 +657,7 @@ def test_random_uniform_cameras(hparams, datamodule):
     volume_shape = hparams.shape
     volume_model = VolumeModel(
         renderer,
-        # volume_shape = [volume_shape] * 3, 
+        # volume_shape = [volume_shape]*3, 
         # voxel_size = volume_extent_world / volume_shape,
     ).to(device)
 
