@@ -5,6 +5,8 @@ from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import DeviceStatsMonitor
+from pytorch_lightning.callbacks import ModelSummary
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.seed import seed_everything
 # from sympy import re
@@ -255,7 +257,7 @@ class NeRVDataModule(LightningDataModule):
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
-    if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm3d)):
+    if isinstance(m, (nn.InstanceNorm2d, nn.BatchNorm3d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
         torch.nn.init.constant_(m.bias, 0)
 
@@ -290,31 +292,31 @@ class Decoder(nn.Module):
         self.spread_net = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(num_filters*64),
+            nn.InstanceNorm2d(num_filters*64),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 4 x 4
             nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*32),
+            nn.InstanceNorm2d(num_filters*32),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 8 x 8
             nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*16),
+            nn.InstanceNorm2d(num_filters*16),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 16 x 16
             nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*8),
+            nn.InstanceNorm2d(num_filters*8),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 32 x 32
             nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*4),
+            nn.InstanceNorm2d(num_filters*4),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 64 x 64
             nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*2),
+            nn.InstanceNorm2d(num_filters*2),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 128 x 128
             nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters),
+            nn.InstanceNorm2d(num_filters),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 256 x 256
             nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
@@ -376,10 +378,10 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="pixelshuffle",
+                mode="conv",
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout=0.5,
+                # norm=Norm.BATCH,
+                # dropout=0.5,
             ), 
             View((-1, 1, self.shape, self.shape, self.shape)),
             # nn.Sigmoid()  
@@ -395,10 +397,10 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="pixelshuffle",
+                mode="conv",
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout=0.5,
+                # norm=Norm.BATCH,
+                # dropout=0.5,
             ), 
             nn.Sigmoid()  
         )
@@ -408,8 +410,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                pretrained=True, 
-                dropout_prob=0.5,
+                # pretrained=True, 
+                # dropout_prob=0.5,
             ),
             nn.Sigmoid()
         )
@@ -428,6 +430,25 @@ class NeRVLightningModule(LightningModule):
         self.l1loss = nn.L1Loss(reduction='mean')
         # self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
         # self.dcloss = CustomDiceLoss()
+        # self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
+
+    def forward(self, image3d):
+        # Generate deterministic cameras
+        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
+        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
+        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                     batch_size=self.batch_size, 
+                                     cam_mu=cam_mu,
+                                     cam_bw=cam_bw,
+                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
+
+
+        # Four-way cycle consistent loss
+        orgcam_im2d = self.forward_screen(image3d, orgcam)
+        estcam_feat = self.forward_camera(orgcam_im2d)
+        estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
+        return estim3d, recon3d
 
     def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
@@ -436,16 +457,16 @@ class NeRVLightningModule(LightningModule):
             densities = torch.ones_like(image3d) / 400, 
             voxel_size = 3.2 / self.shape,
         )
-        screen = self.viewer(cameras=cameras, volumes=volumes)
+        screen = self.viewer(volumes=volumes, cameras=cameras)
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
         # concat = torch.cat([image2d, camera_feat.view(camera_feat.shape[0], 
-        #                                           camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        expand = self.spread_net(camera_feat.view(camera_feat.shape[0], 
-                                               camera_feat.shape[1], 1, 1))
-        # print(expand.shape, image2d.shape)
-        concat = torch.cat([image2d, expand], dim=1)
+        #                                               camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
+        spread = self.spread_net(camera_feat.view(camera_feat.shape[0], 
+                                                  camera_feat.shape[1], 1, 1))
+
+        concat = torch.cat([image2d, spread], dim=1)
         volume = self.volume_net(concat)
         refine = self.refine_net(volume)
         return volume, refine
@@ -459,9 +480,9 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
-        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-
+        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
+        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
@@ -513,7 +534,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 10*im3d_loss + im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -521,8 +542,9 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]        
         # Generate deterministic cameras
         # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
-        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-        
+        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
+
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
@@ -573,7 +595,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + 10*im3d_loss + im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -767,6 +789,8 @@ if __name__ == "__main__":
         callbacks=[
             lr_callback,
             checkpoint_callback, 
+            DeviceStatsMonitor(), 
+            # ModelSummary(max_depth=-1), 
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
@@ -776,6 +800,9 @@ if __name__ == "__main__":
         # auto_scale_batch_size=True, 
         # gradient_clip_val=0.001, 
         # gradient_clip_algorithm='value', #'norm', #'value'
+        track_grad_norm=2, 
+        detect_anomaly=True, 
+        profiler="simple",
     )
 
     # Create data module
