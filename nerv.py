@@ -248,7 +248,7 @@ class NeRVDataModule(LightningDataModule):
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=4, 
+            num_workers=2, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -293,31 +293,31 @@ class Decoder(nn.Module):
             # input is Z, going into a convolution
             nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
             nn.InstanceNorm2d(num_filters*64),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 4 x 4
             nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*32),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 8 x 8
             nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*16),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 16 x 16
             nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*8),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 32 x 32
             nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*4),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 64 x 64
             nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*2),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 128 x 128
             nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters),
-            nn.ReLU(True),
+            nn.LeakyReLU(True),
             # state size. (num_filters*x) x 256 x 256
             nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
             # nn.Sigmoid()
@@ -373,12 +373,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1+1,
                 out_channels=self.shape, # value and alpha
-                channels=(32, 64, 128, 256, 512, 1024), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # mode="conv",
                 # norm=Norm.BATCH,
                 # dropout=0.5,
@@ -392,12 +392,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
-                channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(8, 16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # mode="conv",
                 # norm=Norm.BATCH,
                 # dropout=0.5,
@@ -420,7 +420,7 @@ class NeRVLightningModule(LightningModule):
             Decoder(
                 in_channels=5,
                 out_channels=1,
-                num_filters=32,
+                num_filters=16,
             ),
             nn.Sigmoid()
         )
@@ -430,25 +430,25 @@ class NeRVLightningModule(LightningModule):
         self.l1loss = nn.L1Loss(reduction='mean')
         # self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
         # self.dcloss = CustomDiceLoss()
-        self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
+        # self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
 
-    def forward(self, image3d):
-        # Generate deterministic cameras
-        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
-        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                     batch_size=self.batch_size, 
-                                     cam_mu=cam_mu,
-                                     cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
+    # def forward(self, image3d):
+    #     # Generate deterministic cameras
+    #     orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
+    #     # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+    #     # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
+    #     orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+    #                                  batch_size=self.batch_size, 
+    #                                  cam_mu=cam_mu,
+    #                                  cam_bw=cam_bw,
+    #                                  cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
 
 
-        # Four-way cycle consistent loss
-        orgcam_im2d = self.forward_screen(image3d, orgcam)
-        estcam_feat = self.forward_camera(orgcam_im2d)
-        estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
-        return estim3d, recon3d
+    #     # Four-way cycle consistent loss
+    #     orgcam_im2d = self.forward_screen(image3d, orgcam)
+    #     estcam_feat = self.forward_camera(orgcam_im2d)
+    #     estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
+    #     return estim3d, recon3d
 
     def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
@@ -476,128 +476,150 @@ class NeRVLightningModule(LightningModule):
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        image3d = batch["image3d"]
-        image2d = batch["image2d"]
+        orgvol_ct = batch["image3d"]
+        orgimg_xr = batch["image2d"]
+        _device = orgvol_ct.device
+
+        # CT path
+        orgcam_ct_ft = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        orgcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=orgcam_ct_ft*2. - 1.).to(_device)
+        screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct_ft = self.forward_camera(screen_ct)
+        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct_ft)
+        estcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=estcam_ct_ft*2. - 1.).to(_device)
+        screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
+
+        # XR path
+        estcam_xr_ft = self.forward_camera(orgimg_xr)
+        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr_ft)
+        estcam_xr = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=estcam_xr_ft*2. - 1.).to(_device)
+        screen_xr = self.forward_screen(estvol_xr, estcam_xr)
+        estcam_xr_ft_recon = self.forward_camera(screen_xr)
+        midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
         
-        # Generate deterministic cameras
-        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
-        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                     batch_size=self.batch_size, 
-                                     cam_mu=cam_mu,
-                                     cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
+        # Loss
+        im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
+                  + self.l1loss(midvol_ct, estvol_ct) \
+                  + self.l1loss(midvol_xr, estvol_xr) \
+                  + self.l1loss(midvol_xr_recon, estvol_xr_recon) \
+                  + self.l1loss(midvol_xr, midvol_xr_recon) \
+                  + self.l1loss(estvol_xr, estvol_xr_recon) \
 
+        im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
+                  + self.l1loss(orgimg_xr, screen_xr) \
+                    
+        cams_loss = self.l1loss(orgcam_ct_ft, estcam_ct_ft) \
+                  + self.l1loss(estcam_xr_ft, estcam_xr_ft_recon) \
 
-        # Four-way cycle consistent loss
-        orgcam_im2d = self.forward_screen(image3d, orgcam)
-        estcam_feat = self.forward_camera(orgcam_im2d)
-        estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
-
-        # sample
-        xr_cam_feat = self.forward_camera(image2d)
-        xr_est_im3d, xr_rec_im3d = self.forward_volume(image2d, xr_cam_feat)
-        xr_cam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                     batch_size=self.batch_size,
-                                     cam_mu=cam_mu,
-                                     cam_bw=cam_bw,
-                                     cam_ft=xr_cam_feat*2. - 1.).to(image3d.device)
-        xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
-
-
-        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.l1loss(recon3d, image3d) \
-                  + self.l1loss(xr_est_im3d, xr_rec_im3d) \
-                # + self.l1loss(estim3d, recon3d) \
-
-        im3d_loss = im3d_loss / 2.0
-        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
-
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([image3d[...,self.shape//2], 
-                                 recon3d[...,self.shape//2], 
-                                 orgcam_im2d,
-                                 image2d,
-                                 xr_est_im2d], dim=-1)
+                viz = torch.cat([orgvol_ct[...,self.shape//2], 
+                                 estvol_ct[...,self.shape//2], 
+                                 screen_ct,
+                                 orgimg_xr,
+                                 screen_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
 
-                plot_2d_or_3d_image(data=torch.cat([image3d, 
-                                                    recon3d, 
-                                                    xr_rec_im3d], dim=-2), 
+                plot_2d_or_3d_image(data=torch.cat([orgvol_ct, 
+                                                    estvol_ct, 
+                                                    estvol_xr], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
-        return info     
+        return info
 
-    def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
-        image3d = batch["image3d"]
-        image2d = batch["image2d"]        
-        # Generate deterministic cameras
-        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
-        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
-        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
         
-        orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                     batch_size=self.batch_size, 
-                                     cam_mu=cam_mu,
-                                     cam_bw=cam_bw,
-                                     cam_ft=orgcam_feat*2. - 1.).to(image3d.device)
+    def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
+        orgvol_ct = batch["image3d"]
+        orgimg_xr = batch["image2d"]
+        _device = orgvol_ct.device
 
+        # CT path
+        orgcam_ct_ft = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        orgcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=orgcam_ct_ft*2. - 1.).to(_device)
+        screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct_ft = self.forward_camera(screen_ct)
+        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct_ft)
+        estcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=estcam_ct_ft*2. - 1.).to(_device)
+        screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
 
-        # Four-way cycle consistent loss
-        orgcam_im2d = self.forward_screen(image3d, orgcam)
-        estcam_feat = self.forward_camera(orgcam_im2d)
-        estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
+        # XR path
+        estcam_xr_ft = self.forward_camera(orgimg_xr)
+        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr_ft)
+        estcam_xr = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                        batch_size=self.batch_size, 
+                                        cam_mu=cam_mu,
+                                        cam_bw=cam_bw,
+                                        cam_ft=estcam_xr_ft*2. - 1.).to(_device)
+        screen_xr = self.forward_screen(estvol_xr, estcam_xr)
+        estcam_xr_ft_recon = self.forward_camera(screen_xr)
+        midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
+        
+        # Loss
+        im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
+                  + self.l1loss(midvol_ct, estvol_ct) \
+                  + self.l1loss(midvol_xr, estvol_xr) \
+                  + self.l1loss(midvol_xr_recon, estvol_xr_recon) \
+                  + self.l1loss(midvol_xr, midvol_xr_recon) \
+                  + self.l1loss(estvol_xr, estvol_xr_recon) \
 
-        # sample
-        xr_cam_feat = self.forward_camera(image2d)
-        xr_est_im3d, xr_rec_im3d = self.forward_volume(image2d, xr_cam_feat)
-        xr_cam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                      batch_size=self.batch_size,
-                                      cam_mu=cam_mu,
-                                      cam_bw=cam_bw,
-                                      cam_ft=xr_cam_feat*2. - 1.).to(image3d.device)
-        xr_est_im2d = self.forward_screen(xr_rec_im3d, xr_cam)
+        im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
+                  + self.l1loss(orgimg_xr, screen_xr) \
+                    
+        cams_loss = self.l1loss(orgcam_ct_ft, estcam_ct_ft) \
+                  + self.l1loss(estcam_xr_ft, estcam_xr_ft_recon) \
 
-
-        im2d_loss = self.l1loss(image2d, xr_est_im2d)    # self.l1loss(orgcam_im2d, estcam_im2d) +              
-        im3d_loss = self.l1loss(recon3d, image3d) \
-                  + self.l1loss(xr_est_im3d, xr_rec_im3d) \
-                # + self.l1loss(estim3d, recon3d) \
-
-        im3d_loss = im3d_loss / 2.0
-        cams_loss = self.l1loss(orgcam_feat, estcam_feat)
-
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
+        
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True)
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([image3d[...,self.shape//2], 
-                                 recon3d[...,self.shape//2], 
-                                 orgcam_im2d,
-                                 image2d,
-                                 xr_est_im2d], dim=-1)
+                viz = torch.cat([orgvol_ct[...,self.shape//2], 
+                                 estvol_ct[...,self.shape//2], 
+                                 screen_ct,
+                                 orgimg_xr,
+                                 screen_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
-                plot_2d_or_3d_image(data=torch.cat([image3d, 
-                                                    recon3d, 
-                                                    xr_rec_im3d], dim=-2), 
-                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-        
-        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
-        return info
 
+                plot_2d_or_3d_image(data=torch.cat([orgvol_ct, 
+                                                    estvol_ct, 
+                                                    estvol_xr], dim=-2), 
+                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+
+        return info
+        
     def validation_step(self, batch, batch_idx):
         return self.evaluation_step(batch, batch_idx, stage='validation')
 
@@ -800,9 +822,9 @@ if __name__ == "__main__":
         # auto_scale_batch_size=True, 
         # gradient_clip_val=0.001, 
         # gradient_clip_algorithm='value', #'norm', #'value'
-        track_grad_norm=2, 
-        detect_anomaly=True, 
-        profiler="simple",
+        # track_grad_norm=2, 
+        # detect_anomaly=True, 
+        # profiler="simple",
     )
 
     # Create data module
