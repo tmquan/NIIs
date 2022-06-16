@@ -450,8 +450,14 @@ class NeRVLightningModule(LightningModule):
     #     estim3d, recon3d = self.forward_volume(orgcam_im2d, estcam_feat)
     #     return estim3d, recon3d
 
-    def forward_screen(self, image3d: torch.Tensor, cameras: Type[CamerasBase]=None, 
+    def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
         factor: float=None, weight: float=None, is_deterministic: bool=False,):
+        cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                                batch_size=self.batch_size, 
+                                cam_mu=cam_mu,
+                                cam_bw=cam_bw,
+                                cam_ft=camera_feat*2. - 1.).to(image3d.device)
+                                
         volumes = Volumes(
             features = torch.cat([image3d]*3, dim=1),
             densities = torch.ones_like(image3d) / 400, 
@@ -481,32 +487,18 @@ class NeRVLightningModule(LightningModule):
         _device = orgvol_ct.device
 
         # CT path
-        orgcam_ct_ft = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        orgcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=orgcam_ct_ft*2. - 1.).to(_device)
+        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+
         screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct_ft = self.forward_camera(screen_ct)
-        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct_ft)
-        estcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=estcam_ct_ft*2. - 1.).to(_device)
+        estcam_ct = self.forward_camera(screen_ct)
+        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct)
         screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
-        estcam_xr_ft = self.forward_camera(orgimg_xr)
-        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr_ft)
-        estcam_xr = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=estcam_xr_ft*2. - 1.).to(_device)
+        estcam_xr = self.forward_camera(orgimg_xr)
+        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         screen_xr = self.forward_screen(estvol_xr, estcam_xr)
-        estcam_xr_ft_recon = self.forward_camera(screen_xr)
+        estcam_xr_recon = self.forward_camera(screen_xr)
         midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
         
         # Loss
@@ -520,8 +512,8 @@ class NeRVLightningModule(LightningModule):
         im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
                   + self.l1loss(orgimg_xr, screen_xr) \
                     
-        cams_loss = self.l1loss(orgcam_ct_ft, estcam_ct_ft) \
-                  + self.l1loss(estcam_xr_ft, estcam_xr_ft_recon) \
+        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
+                  + self.l1loss(estcam_xr, estcam_xr_recon) \
 
         info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         
@@ -554,32 +546,18 @@ class NeRVLightningModule(LightningModule):
         _device = orgvol_ct.device
 
         # CT path
-        orgcam_ct_ft = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        orgcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=orgcam_ct_ft*2. - 1.).to(_device)
+        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+
         screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct_ft = self.forward_camera(screen_ct)
-        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct_ft)
-        estcam_ct = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=estcam_ct_ft*2. - 1.).to(_device)
+        estcam_ct = self.forward_camera(screen_ct)
+        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct)
         screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
-        estcam_xr_ft = self.forward_camera(orgimg_xr)
-        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr_ft)
-        estcam_xr = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                        batch_size=self.batch_size, 
-                                        cam_mu=cam_mu,
-                                        cam_bw=cam_bw,
-                                        cam_ft=estcam_xr_ft*2. - 1.).to(_device)
+        estcam_xr = self.forward_camera(orgimg_xr)
+        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         screen_xr = self.forward_screen(estvol_xr, estcam_xr)
-        estcam_xr_ft_recon = self.forward_camera(screen_xr)
+        estcam_xr_recon = self.forward_camera(screen_xr)
         midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
         
         # Loss
@@ -593,8 +571,8 @@ class NeRVLightningModule(LightningModule):
         im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
                   + self.l1loss(orgimg_xr, screen_xr) \
                     
-        cams_loss = self.l1loss(orgcam_ct_ft, estcam_ct_ft) \
-                  + self.l1loss(estcam_xr_ft, estcam_xr_ft_recon) \
+        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
+                  + self.l1loss(estcam_xr, estcam_xr_recon) \
 
         info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         
