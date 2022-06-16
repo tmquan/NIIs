@@ -293,31 +293,31 @@ class Decoder(nn.Module):
             # input is Z, going into a convolution
             nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
             nn.InstanceNorm2d(num_filters*64),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 4 x 4
             nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*32),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 8 x 8
             nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*16),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 16 x 16
             nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*8),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 32 x 32
             nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*4),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 64 x 64
             nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters*2),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 128 x 128
             nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
             nn.InstanceNorm2d(num_filters),
-            nn.LeakyReLU(True),
+            nn.ReLU(True),
             # state size. (num_filters*x) x 256 x 256
             nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
             # nn.Sigmoid()
@@ -369,7 +369,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=2,
                 in_channels=1+1,
                 out_channels=self.shape, # value and alpha
@@ -378,8 +378,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="conv",
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ReLU", {"inplace": True}),
+                # mode="conv",
                 # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
@@ -388,7 +388,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.refine_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
@@ -397,8 +397,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                mode="conv",
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ReLU", {"inplace": True}),
+                # mode="conv",
                 # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
@@ -430,7 +430,7 @@ class NeRVLightningModule(LightningModule):
         self.l1loss = nn.L1Loss(reduction='mean')
         # self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
         # self.dcloss = CustomDiceLoss()
-        # self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
+        self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
 
     def forward(self, image3d):
         # Generate deterministic cameras
@@ -480,9 +480,9 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]
         
         # Generate deterministic cameras
-        orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
-        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(image3d.device)
         # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
+        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
@@ -534,7 +534,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        info = {'loss': 2*cams_loss + 10*im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info     
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -542,9 +542,9 @@ class NeRVLightningModule(LightningModule):
         image2d = batch["image2d"]        
         # Generate deterministic cameras
         # orgcam_feat = torch.Tensor(self.batch_size, 5).uniform_(0.0, 1.0).to(imag).to(image3d.device)
-        # orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
-        orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
-
+        # orgcam_feat = torch.rand([self.batch_size, 5], device=(image3d.device))
+        orgcam_feat = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device) 
+        
         orgcam = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                      batch_size=self.batch_size, 
                                      cam_mu=cam_mu,
@@ -595,7 +595,7 @@ class NeRVLightningModule(LightningModule):
                                                     xr_rec_im3d], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-        info = {'loss': 2*cams_loss + 10*im3d_loss + im2d_loss}
+        info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -789,7 +789,7 @@ if __name__ == "__main__":
         callbacks=[
             lr_callback,
             checkpoint_callback, 
-            DeviceStatsMonitor(), 
+            # DeviceStatsMonitor(), 
             # ModelSummary(max_depth=-1), 
             # tensorboard_callback
         ],
