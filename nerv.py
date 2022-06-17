@@ -258,10 +258,10 @@ cam_mu = {
     "aspect_ratio": 1.0,
 }
 cam_bw = {
-    "dist": 0.5,
-    "elev": 40.,
-    "azim": 40.,
-    "fov": 40.,
+    "dist": 0.4,
+    "elev": 20.,
+    "azim": 20.,
+    "fov": 20.,
     "aspect_ratio": 0.2
 }
 
