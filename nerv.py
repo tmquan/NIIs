@@ -21,7 +21,8 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 # from kornia.augmentation import Normalize
 
 from monai.visualize.img2tensorboard import plot_2d_or_3d_image
-from monai.networks.nets import *#UNet, DenseNet121, DenseNet201
+from monai.networks.layers import * #Reshape
+from monai.networks.nets import * #UNet, DenseNet121, Generator
 from monai.losses import DiceLoss
 
 from model import *
@@ -45,18 +46,6 @@ class ScreenModel(nn.Module):
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
         return screen_RGB
-
-class CustomDiceLoss(nn.Module):
-    def __init__(self, weight=None, smooth=1):
-        super().__init__()
-        self.weight = weight
-        self.smooth = smooth
-    
-    def forward(self, source, target):
-        diff = torch.abs(source-target)
-        return DiceLoss()(torch.cat([diff, 1-diff], 0), 
-                          torch.cat([torch.zeros_like(diff), torch.ones_like(diff)], 0))
-                
 
 class NeRVDataModule(LightningDataModule):
     def __init__(self, 
@@ -257,7 +246,7 @@ class NeRVDataModule(LightningDataModule):
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
-    if isinstance(m, (nn.InstanceNorm2d, nn.BatchNorm3d)):
+    if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm3d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
         torch.nn.init.constant_(m.bias, 0)
 
@@ -276,47 +265,37 @@ cam_bw = {
     "aspect_ratio": 0.1
 }
 
-class View(nn.Module):
-    def __init__(self, shape):
-        super(View, self).__init__()
-        self.shape = shape
-
-    def forward(self, x):
-        return x.view(*self.shape)
-
-# Generator Code
-
 class Decoder(nn.Module):
     def __init__(self, in_channels, out_channels, num_filters=32, use_batchnorm=True):
         super(Decoder, self).__init__()
         self.spread_net = nn.Sequential(
             # input is Z, going into a convolution
             nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
-            nn.InstanceNorm2d(num_filters*64),
+            nn.BatchNorm2d(num_filters*64),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 4 x 4
             nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters*32),
+            nn.BatchNorm2d(num_filters*32),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 8 x 8
             nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters*16),
+            nn.BatchNorm2d(num_filters*16),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 16 x 16
             nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters*8),
+            nn.BatchNorm2d(num_filters*8),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 32 x 32
             nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters*4),
+            nn.BatchNorm2d(num_filters*4),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 64 x 64
             nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters*2),
+            nn.BatchNorm2d(num_filters*2),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 128 x 128
             nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
-            nn.InstanceNorm2d(num_filters),
+            nn.BatchNorm2d(num_filters),
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 256 x 256
             nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
@@ -326,6 +305,7 @@ class Decoder(nn.Module):
 
     def forward(self, input):
         return self.spread_net(input)
+
 
 # NeRPLightningModule
 class NeRVLightningModule(LightningModule):
@@ -379,11 +359,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # mode="conv",
                 # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
-            View((-1, 1, self.shape, self.shape, self.shape)),
+            Flatten(),
+            Reshape(*[1, self.shape, self.shape, self.shape]),
             # nn.Sigmoid()  
         )
 
@@ -398,9 +378,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # mode="conv",
-                # norm=Norm.BATCH,
-                # dropout=0.5,
+                norm=Norm.BATCH,
+                dropout=0.5,
             ), 
             nn.Sigmoid()  
         )
@@ -410,13 +389,37 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                # pretrained=True, 
-                # dropout_prob=0.5,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                dropout_prob=0.5,
+                pretrained=True, 
             ),
             nn.Sigmoid()
         )
 
         self.spread_net = nn.Sequential(
+            # Generator(
+            #     latent_shape=(5),
+            #     start_shape=(64, 4, 4),
+            #     channels=[32, 32, 32, 
+            #               16, 16, 16, 
+            #               8, 8, 8, 
+            #               4, 4, 4, 
+            #               2, 2, 2, 
+            #               1, 1, 1],
+            #     strides=[1, 2, 1, 
+            #              1, 2, 1, 
+            #              1, 2, 1, 
+            #              1, 2, 1, 
+            #              1, 2, 1, 
+            #              1, 2, 1],
+            #     num_res_units=3,
+            #     kernel_size=3,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     norm=Norm.BATCH,
+            #     dropout=0.5,
+            # ),
+            Reshape(5, 1, 1),
             Decoder(
                 in_channels=5,
                 out_channels=1,
@@ -428,8 +431,6 @@ class NeRVLightningModule(LightningModule):
         # self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
-        # self.hbloss = nn.HuberLoss(reduction='mean', delta=1.0) # delta=1.0 mean SmoothL1Loss
-        # self.dcloss = CustomDiceLoss()
         # self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
 
     # def forward(self, image3d):
@@ -469,8 +470,8 @@ class NeRVLightningModule(LightningModule):
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
         # concat = torch.cat([image2d, camera_feat.view(camera_feat.shape[0], 
         #                                               camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        spread = self.spread_net(camera_feat.view(camera_feat.shape[0], 
-                                                  camera_feat.shape[1], 1, 1))
+        spread = self.spread_net(camera_feat)
+        # print(spread.shape)
 
         concat = torch.cat([image2d, spread], dim=1)
         volume = self.volume_net(concat)
@@ -489,31 +490,31 @@ class NeRVLightningModule(LightningModule):
         # CT path
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
-        screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(screen_ct)
-        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct)
-        screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct = self.forward_camera(estimg_ct)
+        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
-        screen_xr = self.forward_screen(estvol_xr, estcam_xr)
-        estcam_xr_recon = self.forward_camera(screen_xr)
-        midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
+        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
+        reccam_xr = self.forward_camera(estimg_xr)
+        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(midvol_ct, estvol_ct) \
-                  + self.l1loss(midvol_xr, estvol_xr) \
-                  + self.l1loss(midvol_xr_recon, estvol_xr_recon) \
-                  + self.l1loss(midvol_xr, midvol_xr_recon) \
-                  + self.l1loss(estvol_xr, estvol_xr_recon) \
+                  + self.l1loss(estmid_ct, estvol_ct) \
+                  + self.l1loss(estmid_xr, estvol_xr) \
+                  + self.l1loss(recmid_xr, recvol_xr) \
+                  + self.l1loss(estmid_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
 
-        im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
-                  + self.l1loss(orgimg_xr, screen_xr) \
+        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
+                  + self.l1loss(orgimg_xr, estimg_xr) \
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(estcam_xr, estcam_xr_recon) \
+                  + self.l1loss(estcam_xr, reccam_xr) \
 
         info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         
@@ -525,9 +526,9 @@ class NeRVLightningModule(LightningModule):
             with torch.no_grad():
                 viz = torch.cat([orgvol_ct[...,self.shape//2], 
                                  estvol_ct[...,self.shape//2], 
-                                 screen_ct,
+                                 estimg_ct,
                                  orgimg_xr,
-                                 screen_xr], dim=-1)
+                                 estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
@@ -548,32 +549,32 @@ class NeRVLightningModule(LightningModule):
         # CT path
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
-        screen_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(screen_ct)
-        midvol_ct, estvol_ct = self.forward_volume(screen_ct, estcam_ct)
-        screen_ct_recon = self.forward_screen(estvol_ct, estcam_ct)
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct = self.forward_camera(estimg_ct)
+        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        midvol_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
-        screen_xr = self.forward_screen(estvol_xr, estcam_xr)
-        estcam_xr_recon = self.forward_camera(screen_xr)
-        midvol_xr_recon, estvol_xr_recon = self.forward_screen(estvol_xr, estcam_xr)
+        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
+        reccam_xr = self.forward_camera(estimg_xr)
+        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(midvol_ct, estvol_ct) \
-                  + self.l1loss(midvol_xr, estvol_xr) \
-                  + self.l1loss(midvol_xr_recon, estvol_xr_recon) \
-                  + self.l1loss(midvol_xr, midvol_xr_recon) \
-                  + self.l1loss(estvol_xr, estvol_xr_recon) \
+                  + self.l1loss(estmid_ct, estvol_ct) \
+                  + self.l1loss(estmid_xr, estvol_xr) \
+                  + self.l1loss(recmid_xr, recvol_xr) \
+                  + self.l1loss(estmid_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
 
-        im2d_loss = self.l1loss(screen_ct, screen_ct_recon) \
-                  + self.l1loss(orgimg_xr, screen_xr) \
+        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
+                  + self.l1loss(orgimg_xr, estimg_xr) \
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(estcam_xr, estcam_xr_recon) \
-
+                  + self.l1loss(estcam_xr, reccam_xr) \
+        
         info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
@@ -584,9 +585,9 @@ class NeRVLightningModule(LightningModule):
             with torch.no_grad():
                 viz = torch.cat([orgvol_ct[...,self.shape//2], 
                                  estvol_ct[...,self.shape//2], 
-                                 screen_ct,
+                                 estimg_ct,
                                  orgimg_xr,
-                                 screen_xr], dim=-1)
+                                 estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
