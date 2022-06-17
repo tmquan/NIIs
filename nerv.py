@@ -258,11 +258,11 @@ cam_mu = {
     "aspect_ratio": 1.0,
 }
 cam_bw = {
-    "dist": 0.3,
-    "elev": 20.,
-    "azim": 20.,
-    "fov": 20.,
-    "aspect_ratio": 0.1
+    "dist": 0.5,
+    "elev": 40.,
+    "azim": 40.,
+    "fov": 40.,
+    "aspect_ratio": 0.2
 }
 
 class Decoder(nn.Module):
@@ -576,7 +576,7 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estcam_xr, reccam_xr) \
         
         info = {'loss': 2*cams_loss + im3d_loss + im2d_loss}
-        
+
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True)
