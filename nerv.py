@@ -476,7 +476,7 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, spread], dim=1)
         volume = self.volume_net(concat)
         refine = self.refine_net(volume)
-        return volume, refine
+        return spread, volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
         camera = self.camera_net(image2d) # [0, 1] 
@@ -492,15 +492,15 @@ class NeRVLightningModule(LightningModule):
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        camimg_ct, estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
         recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        camimg_xr, estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        recimg_xr, recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -524,11 +524,16 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([orgvol_ct[...,self.shape//2], 
-                                 estvol_ct[...,self.shape//2], 
-                                 estimg_ct,
-                                 orgimg_xr,
-                                 estimg_xr], dim=-1)
+                viz = torch.cat([
+                        torch.cat([orgvol_ct[...,self.shape//2], 
+                                   estvol_ct[...,self.shape//2], 
+                                   estimg_ct,
+                                   recimg_ct,], dim=-1),
+                        torch.cat([camimg_ct,
+                                   camimg_xr,
+                                   orgimg_xr,
+                                   estimg_xr], dim=-1),
+                        ], dim=-2)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
@@ -546,20 +551,20 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         _device = orgvol_ct.device
 
-        # CT path
+         # CT path
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        camimg_ct, estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
         recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        camimg_xr, estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        recimg_xr, recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -583,11 +588,16 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                viz = torch.cat([orgvol_ct[...,self.shape//2], 
-                                 estvol_ct[...,self.shape//2], 
-                                 estimg_ct,
-                                 orgimg_xr,
-                                 estimg_xr], dim=-1)
+                viz = torch.cat([
+                        torch.cat([orgvol_ct[...,self.shape//2], 
+                                   estvol_ct[...,self.shape//2], 
+                                   estimg_ct,
+                                   recimg_ct,], dim=-1),
+                        torch.cat([camimg_ct,
+                                   camimg_xr,
+                                   orgimg_xr,
+                                   estimg_xr], dim=-1),
+                        ], dim=-2)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
