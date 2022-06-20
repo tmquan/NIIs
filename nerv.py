@@ -365,7 +365,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid()  
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -527,22 +527,20 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                # viz = torch.cat([
-                #         torch.cat([orgvol_ct[...,self.shape//2], 
-                #                    estvol_ct[...,self.shape//2], 
-                #                    estimg_ct,
-                #                    recimg_ct,], dim=-1),
-                #         torch.cat([camimg_ct,
-                #                    camimg_xr,
-                #                    orgimg_xr,
-                #                    estimg_xr], dim=-1),
-                #         ], dim=-2)
-                viz = torch.cat([orgvol_ct[...,self.shape//2], 
-                                 estvol_ct[...,self.shape//2], 
-                                 estimg_ct,
-                                 recimg_ct,
-                                 orgimg_xr,
-                                 estimg_xr], dim=-1)
+                viz = torch.cat([
+                        torch.cat([orgvol_ct[...,self.shape//2], 
+                                   estimg_ct,
+                                   recimg_ct], dim=-1),
+                        torch.cat([estvol_ct[...,self.shape//2], 
+                                   orgimg_xr,
+                                   estimg_xr], dim=-1),
+                        ], dim=-2)
+                # viz = torch.cat([orgvol_ct[...,self.shape//2],                                  
+                #                  estimg_ct,
+                #                  recimg_ct,
+                #                  estvol_ct[...,self.shape//2], 
+                #                  orgimg_xr,
+                #                  estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
@@ -597,22 +595,20 @@ class NeRVLightningModule(LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                # viz = torch.cat([
-                #         torch.cat([orgvol_ct[...,self.shape//2], 
-                #                    estvol_ct[...,self.shape//2], 
-                #                    estimg_ct,
-                #                    recimg_ct,], dim=-1),
-                #         torch.cat([camimg_ct,
-                #                    camimg_xr,
-                #                    orgimg_xr,
-                #                    estimg_xr], dim=-1),
-                #         ], dim=-2)
-                viz = torch.cat([orgvol_ct[...,self.shape//2], 
-                                 estvol_ct[...,self.shape//2], 
-                                 estimg_ct,
-                                 recimg_ct,
-                                 orgimg_xr,
-                                 estimg_xr], dim=-1)
+                viz = torch.cat([
+                        torch.cat([orgvol_ct[...,self.shape//2], 
+                                   estimg_ct,
+                                   recimg_ct], dim=-1),
+                        torch.cat([estvol_ct[...,self.shape//2], 
+                                   orgimg_xr,
+                                   estimg_xr], dim=-1),
+                        ], dim=-2)
+                # viz = torch.cat([orgvol_ct[...,self.shape//2], 
+                #                  estvol_ct[...,self.shape//2], 
+                #                  estimg_ct,
+                #                  recimg_ct,
+                #                  orgimg_xr,
+                #                  estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
