@@ -365,7 +365,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh()  
+            # nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
