@@ -299,7 +299,7 @@ class Decoder(nn.Module):
             nn.LeakyReLU(True),
             # state size. (num_filters*x) x 256 x 256
             nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
-            # nn.Sigmoid()
+            # nn.Tanh()
             # state size. (nc) x 64 x 64
         )
 
@@ -359,13 +359,13 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                dropout=0.5,
+                norm=Norm.BATCH,
+                # dropout=0.5,
                 mode="nontrainable",
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid()  
+            nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
@@ -379,11 +379,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                dropout=0.5,
+                norm=Norm.BATCH,
+                # dropout=0.5,
                 mode="nontrainable",
             ), 
-            # nn.Sigmoid()  
+            nn.Tanh()  
         )
 
         self.camera_net = nn.Sequential(
@@ -392,11 +392,11 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                dropout_prob=0.5,
+                norm=Norm.BATCH,
+                # dropout_prob=0.5,
                 pretrained=True, 
             ),
-            # nn.Sigmoid()
+            nn.Tanh()
         )
 
         # self.spread_net = nn.Sequential(
@@ -418,7 +418,7 @@ class NeRVLightningModule(LightningModule):
         #     #     num_res_units=3,
         #     #     kernel_size=3,
         #     #     act=("LeakyReLU", {"inplace": True}),
-        #     #     norm=Norm.INSTANCE,
+        #     #     norm=Norm.BATCH,
         #     #     dropout=0.5,
         #     # ),
         #     Reshape(5, 1, 1),
@@ -427,7 +427,7 @@ class NeRVLightningModule(LightningModule):
         #         out_channels=1,
         #         num_filters=16,
         #     ),
-        #     nn.Sigmoid()
+        #     nn.Tanh()
         # )
         # self.volume_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
@@ -447,13 +447,21 @@ class NeRVLightningModule(LightningModule):
         return recimg_ct
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
-        factor: float=None, weight: float=None, is_deterministic: bool=False,):
+        factor: float=None, weight: float=None, is_deterministic: bool=False,
+        norm_type: str="standardized"):
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                 batch_size=self.batch_size, 
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
-                                
+
+        # normalized = lambda x: (x - x.min())/(x.max() - x.min())
+        # standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
+        # if norm_type == "normalized":
+        #     image3d = normalized(image3d)
+        # elif norm_type == "standardized":
+        #     image3d = normalized(standardized(image3d))
+
         volumes = Volumes(
             features = torch.cat([image3d]*3, dim=1),
             densities = torch.ones_like(image3d) / 400, 
@@ -470,12 +478,12 @@ class NeRVLightningModule(LightningModule):
         # print(spread.shape)
         # concat = torch.cat([image2d, spread], dim=1)
 
-        volume = self.volume_net(concat)
-        refine = self.refine_net(volume)
+        volume = self.volume_net(concat * 2. - 1.) * 0.5 + 0.5
+        refine = self.refine_net(volume * 2. - 1.) * 0.5 + 0.5
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) # [0, 1] 
+        camera = self.camera_net(image2d * 2. - 1.) * 0.5 + 0.5 # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
