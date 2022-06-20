@@ -365,7 +365,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Tanh()  
+            nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
@@ -433,12 +433,13 @@ class NeRVLightningModule(LightningModule):
         # self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
-        self.example_input_array = torch.randn(2, 1, self.shape, self.shape, self.shape)
+        self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
         orgvol_ct = image3d
         # Generate deterministic cameras
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device)
+        with torch.no_grad():
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device)
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
