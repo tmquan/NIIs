@@ -467,8 +467,8 @@ class CustomUNet(nn.Module):
         if self.num_res_units > 0:
             ru = ResidualUnit(
                 self.dimensions,
-                out_channels,
-                out_channels,
+                in_channels,
+                in_channels,
                 strides=1,
                 kernel_size=self.kernel_size,
                 subunits=self.num_res_units,
@@ -479,8 +479,8 @@ class CustomUNet(nn.Module):
                 last_conv_only=is_top,
                 adn_ordering=self.adn_ordering,
             )
-            conv = nn.Sequential(conv, ru)
-            # conv = nn.Sequential(ru, conv)
+            # conv = nn.Sequential(conv, ru)
+            conv = nn.Sequential(ru, conv)
 
         return conv
 

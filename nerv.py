@@ -349,7 +349,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.volume_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=2,
                 in_channels=1+5,
                 out_channels=self.shape, # value and alpha
@@ -359,17 +359,17 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                # dropout=0.5,
-                mode="nontrainable",
+                norm=Norm.BATCH,
+                dropout=0.5,
+                # mode="conv",
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh()  
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
@@ -379,11 +379,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                # dropout=0.5,
-                mode="nontrainable",
+                norm=Norm.BATCH,
+                dropout=0.5,
+                # mode="conv",
             ), 
-            nn.Tanh()  
+            nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
@@ -392,43 +392,13 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                # dropout_prob=0.5,
+                norm=Norm.BATCH,
+                dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.Tanh()
+            nn.Sigmoid()
         )
 
-        # self.spread_net = nn.Sequential(
-        #     # Generator(
-        #     #     latent_shape=(5),
-        #     #     start_shape=(64, 4, 4),
-        #     #     channels=[32, 32, 32, 
-        #     #               16, 16, 16, 
-        #     #               8, 8, 8, 
-        #     #               4, 4, 4, 
-        #     #               2, 2, 2, 
-        #     #               1, 1, 1],
-        #     #     strides=[1, 2, 1, 
-        #     #              1, 2, 1, 
-        #     #              1, 2, 1, 
-        #     #              1, 2, 1, 
-        #     #              1, 2, 1, 
-        #     #              1, 2, 1],
-        #     #     num_res_units=3,
-        #     #     kernel_size=3,
-        #     #     act=("LeakyReLU", {"inplace": True}),
-        #     #     norm=Norm.INSTANCE,
-        #     #     dropout=0.5,
-        #     # ),
-        #     Reshape(5, 1, 1),
-        #     Decoder(
-        #         in_channels=5,
-        #         out_channels=1,
-        #         num_filters=16,
-        #     ),
-        #     nn.Tanh()
-        # )
         # self.volume_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         
@@ -456,13 +426,6 @@ class NeRVLightningModule(LightningModule):
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
 
-        # normalized = lambda x: (x - x.min())/(x.max() - x.min())
-        # standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
-        # if norm_type == "normalized":
-        #     image3d = normalized(image3d)
-        # elif norm_type == "standardized":
-        #     image3d = normalized(standardized(image3d))
-
         volumes = Volumes(
             features = torch.cat([image3d]*3, dim=1),
             densities = torch.ones_like(image3d) / 400, 
@@ -475,16 +438,12 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        # spread = self.spread_net(camera_feat)
-        # print(spread.shape)
-        # concat = torch.cat([image2d, spread], dim=1)
-
-        volume = self.volume_net(concat * 2. - 1.) * 0.5 + 0.5
-        refine = self.refine_net(volume * 2. - 1.) * 0.5 + 0.5
+        volume = self.volume_net(concat)
+        refine = self.refine_net(volume)
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d * 2. - 1.) * 0.5 + 0.5 # [0, 1] 
+        camera = self.camera_net(image2d) # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
@@ -493,7 +452,8 @@ class NeRVLightningModule(LightningModule):
         _device = orgvol_ct.device
 
         # CT path
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        with torch.no_grad():
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
@@ -561,7 +521,8 @@ class NeRVLightningModule(LightningModule):
         _device = orgvol_ct.device
 
         # CT path
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        with torch.no_grad():
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
@@ -588,7 +549,7 @@ class NeRVLightningModule(LightningModule):
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
-        
+
         info = {'loss': 2*cams_loss + im2d_loss + im3d_loss}
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
