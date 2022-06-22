@@ -357,8 +357,8 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
 
-        self.volume_net.apply(_weights_init)
-        self.refine_net.apply(_weights_init)
+        # self.volume_net.apply(_weights_init)
+        # self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
         self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
