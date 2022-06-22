@@ -265,48 +265,6 @@ cam_bw = {
     "aspect_ratio": 0.2
 }
 
-class Decoder(nn.Module):
-    def __init__(self, in_channels, out_channels, num_filters=32, use_batchnorm=True):
-        super(Decoder, self).__init__()
-        self.spread_net = nn.Sequential(
-            # input is Z, going into a convolution
-            nn.ConvTranspose2d(in_channels, num_filters*64, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(num_filters*64),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 4 x 4
-            nn.ConvTranspose2d(num_filters*64, num_filters*32, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*32),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 8 x 8
-            nn.ConvTranspose2d( num_filters*32, num_filters*16, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*16),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 16 x 16
-            nn.ConvTranspose2d( num_filters*16, num_filters*8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*8),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 32 x 32
-            nn.ConvTranspose2d( num_filters*8, num_filters*4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*4),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 64 x 64
-            nn.ConvTranspose2d( num_filters*4, num_filters*2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters*2),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 128 x 128
-            nn.ConvTranspose2d( num_filters*2, num_filters, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(num_filters),
-            nn.LeakyReLU(True),
-            # state size. (num_filters*x) x 256 x 256
-            nn.Conv2d( num_filters, out_channels, 3, 1, 1, bias=False),
-            # nn.Tanh()
-            # state size. (nc) x 64 x 64
-        )
-
-    def forward(self, input):
-        return self.spread_net(input)
-
-
 # NeRPLightningModule
 class NeRVLightningModule(LightningModule):
     def __init__(self, hparams, **kwargs):
@@ -360,7 +318,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -380,7 +338,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             nn.Sigmoid()  
@@ -393,14 +351,14 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.Sigmoid()
         )
 
-        # self.volume_net.apply(_weights_init)
-        # self.refine_net.apply(_weights_init)
+        self.volume_net.apply(_weights_init)
+        self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
         self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
