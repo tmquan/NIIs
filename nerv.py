@@ -428,10 +428,10 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(estmid_xr, estvol_xr) \
-                  + self.l1loss(recmid_xr, recvol_xr) \
-                  + self.l1loss(estmid_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
+                #   + self.l1loss(estmid_xr, estvol_xr) \
+                #   + self.l1loss(recmid_xr, recvol_xr) \
+                #   + self.l1loss(estmid_xr, recmid_xr) \
+                #   + self.l1loss(estvol_xr, recvol_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
@@ -497,10 +497,10 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(estmid_xr, estvol_xr) \
-                  + self.l1loss(recmid_xr, recvol_xr) \
-                  + self.l1loss(estmid_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
+                #   + self.l1loss(estmid_xr, estvol_xr) \
+                #   + self.l1loss(recmid_xr, recvol_xr) \
+                #   + self.l1loss(estmid_xr, recmid_xr) \
+                #   + self.l1loss(estvol_xr, recvol_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
