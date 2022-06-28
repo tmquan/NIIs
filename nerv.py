@@ -311,7 +311,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1+5,
                 out_channels=self.shape, # value and alpha
-                channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                # channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(20, 40, 80, 160, 320, 640), 
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -323,7 +324,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.LeakyReLU()  
+            # nn.LeakyReLU()  
         )
 
         self.refine_net = nn.Sequential(
@@ -331,7 +332,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, # value and alpha
-                channels=(8, 16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                # channels=(8, 16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(10, 20, 40, 80, 160, 320), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
                 kernel_size=3,
@@ -341,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 dropout=0.5,
                 # mode="conv",
             ), 
-            nn.LeakyReLU()  
+            nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
@@ -354,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.LeakyReLU()
+            # nn.LeakyReLU()
         )
 
         # self.volume_net.apply(_weights_init)
