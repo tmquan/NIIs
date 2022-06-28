@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid()  
+            nn.LeakyReLU()  
         )
 
         self.refine_net = nn.Sequential(
@@ -341,7 +341,7 @@ class NeRVLightningModule(LightningModule):
                 dropout=0.5,
                 # mode="conv",
             ), 
-            # nn.Sigmoid()  
+            nn.LeakyReLU()  
         )
 
         self.camera_net = nn.Sequential(
@@ -354,14 +354,14 @@ class NeRVLightningModule(LightningModule):
                 dropout_prob=0.5,
                 pretrained=True, 
             ),
-            # nn.Sigmoid()
+            nn.LeakyReLU()
         )
 
         # self.volume_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         
         self.l1loss = nn.L1Loss(reduction='mean')
-        self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
+        # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
         orgvol_ct = image3d
