@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid()  
+            # nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -341,7 +341,7 @@ class NeRVLightningModule(LightningModule):
                 dropout=0.5,
                 # mode="conv",
             ), 
-            nn.Sigmoid()  
+            # nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
@@ -354,7 +354,7 @@ class NeRVLightningModule(LightningModule):
                 dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
 
         # self.volume_net.apply(_weights_init)
