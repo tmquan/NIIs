@@ -324,7 +324,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.LeakyReLU()  
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 dropout_prob=0.5,
                 pretrained=True, 
             ),
-            # nn.LeakyReLU()
+            nn.LeakyReLU()
         )
 
         # self.volume_net.apply(_weights_init)
