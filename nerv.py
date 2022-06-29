@@ -406,7 +406,7 @@ class NeRVLightningModule(LightningModule):
         camera = self.camera_net(image2d) # [0, 1] 
         return camera
 
-    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         _device = orgvol_ct.device
