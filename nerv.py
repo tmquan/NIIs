@@ -139,7 +139,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
-                RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
+                # RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
                 RandScaleCropd(keys=["image3d"], 
                                roi_scale=(0.9, 0.9, 0.8), 
                                max_roi_scale=(1.0, 1.0, 0.8), 
@@ -441,7 +441,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
 
-        info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss}
+        # info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
