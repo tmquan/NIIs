@@ -136,10 +136,13 @@ class NeRVDataModule(LightningDataModule):
                 ScaleIntensityd(keys=["image3d"], 
                         minv=0.0,
                         maxv=1.0),
-                RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
+
                 RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
-                RandFlipd(keys=["image3d", "image2d"], prob=0.5, spatial_axis=1),
+                RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
+                RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
+                RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
+
                 RandScaleCropd(keys=["image3d"], 
                                roi_scale=(0.9, 0.9, 0.8), 
                                max_roi_scale=(1.0, 1.0, 0.8), 
@@ -180,6 +183,7 @@ class NeRVDataModule(LightningDataModule):
                 AddChanneld(keys=["image3d", "image2d"],),
                 Spacingd(keys=["image3d"], pixdim=(1.0, 1.0, 1.0), mode=["bilinear"]),  
                 Rotate90d(keys=["image2d"], k=3),
+                RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
                     Orientationd(keys=('image3d'), axcodes="PRI"),
