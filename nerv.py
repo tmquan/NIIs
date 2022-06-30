@@ -440,8 +440,6 @@ class NeRVLightningModule(LightningModule):
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
-
-        # info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
@@ -472,14 +470,14 @@ class NeRVLightningModule(LightningModule):
                                                     estvol_xr], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        if optimizer_idx==0:
-            info = {'loss': 1e1*im3d_loss+1e0*im2d_loss}
-            return info
-        elif optimizer_idx==1:
-            info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
-            return info
-
-        # return info
+        # if optimizer_idx==0:
+        #     info = {'loss': 1e1*im3d_loss+1e0*im2d_loss}
+        #     return info
+        # elif optimizer_idx==1:
+        #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
+        #     return info
+        info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
+        return info
 
         
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -570,13 +568,13 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_vol = torch.optim.RAdam([
-                {'params': self.volume_net.parameters()},
-                {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
-        opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return opt_vol, opt_cam
-        # opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        # return opt
+        # opt_vol = torch.optim.RAdam([
+        #         {'params': self.volume_net.parameters()},
+        #         {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
+        # opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        # return opt_vol, opt_cam
+        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return opt
 
 def test_random_uniform_cameras(hparams, datamodule):
     # Set up the environment
