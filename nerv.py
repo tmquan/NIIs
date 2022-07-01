@@ -757,8 +757,8 @@ if __name__ == "__main__":
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
-        # gradient_clip_val=0.001, 
-        # gradient_clip_algorithm='value', #'norm', #'value'
+        gradient_clip_val=0.5, 
+        gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
         # detect_anomaly=True, 
         # profiler="simple",
