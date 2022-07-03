@@ -328,7 +328,7 @@ class NeRVLightningModule(LightningModule):
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh()  
+            # nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
@@ -358,7 +358,7 @@ class NeRVLightningModule(LightningModule):
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
                 # dropout_prob=0.5,
-                # pretrained=True, 
+                pretrained=True, 
             ),
             nn.LeakyReLU()
         )
@@ -402,12 +402,12 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        volume = self.volume_net(concat * 2.0 - 1.0) * 0.5 + 1.0
-        refine = self.refine_net(volume * 2.0 - 1.0) * 0.5 + 1.0
+        volume = self.volume_net(concat * 2.0 - 1.0) * 0.5 + 0.5
+        refine = self.refine_net(volume * 2.0 - 1.0) * 0.5 + 0.5
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d * 2.0 - 1.0) * 0.5 + 1.0 # [0, 1] 
+        camera = self.camera_net(image2d * 2.0 - 1.0) * 0.5 + 0.5 # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
