@@ -344,7 +344,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -402,8 +402,8 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        volume = self.volume_net(concat * 2.0 - 1.0)
-        refine = self.refine_net(volume) * 0.5 + 1.0
+        volume = self.volume_net(concat * 2.0 - 1.0) * 0.5 + 1.0
+        refine = self.refine_net(volume * 2.0 - 1.0) * 0.5 + 1.0
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
