@@ -322,13 +322,13 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout=0.5,
+                # norm=Norm.BATCH,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid()  
+            nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
@@ -343,11 +343,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 dropout=0.5,
                 # mode="conv",
             ), 
-            nn.Sigmoid()  
+            nn.Tanh()  
         )
 
         self.camera_net = nn.Sequential(
@@ -356,9 +356,9 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout_prob=0.5,
-                pretrained=True, 
+                # norm=Norm.BATCH,
+                # dropout_prob=0.5,
+                # pretrained=True, 
             ),
             nn.LeakyReLU()
         )
@@ -402,15 +402,15 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        volume = self.volume_net(concat)
-        refine = self.refine_net(volume)
+        volume = self.volume_net(concat * 2.0 - 1.0)
+        refine = self.refine_net(volume) * 0.5 + 1.0
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) # [0, 1] 
+        camera = self.camera_net(image2d * 2.0 - 1.0) * 0.5 + 1.0 # [0, 1] 
         return camera
 
-    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         _device = orgvol_ct.device
@@ -474,14 +474,14 @@ class NeRVLightningModule(LightningModule):
                                                     estvol_xr], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        if optimizer_idx==0:
-            info = {'loss': 1e1*im3d_loss+1e0*im2d_loss}
-            return info
-        elif optimizer_idx==1:
-            info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
-            return info
-        # info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
-        # return info
+        # if optimizer_idx==0:
+        #     info = {'loss': 1e1*im3d_loss+1e0*im2d_loss}
+        #     return info
+        # elif optimizer_idx==1:
+        #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
+        #     return info
+        info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
+        return info
 
         
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
@@ -572,13 +572,13 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_vol = torch.optim.RAdam([
-                {'params': self.volume_net.parameters()},
-                {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
-        opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return opt_vol, opt_cam
-        # opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        # return opt
+        # opt_vol = torch.optim.RAdam([
+        #         {'params': self.volume_net.parameters()},
+        #         {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
+        # opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        # return opt_vol, opt_cam
+        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return opt
 
 def test_random_uniform_cameras(hparams, datamodule):
     # Set up the environment
@@ -757,7 +757,7 @@ if __name__ == "__main__":
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
-        gradient_clip_val=0.5, 
+        gradient_clip_val=5, 
         gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
         # detect_anomaly=True, 
