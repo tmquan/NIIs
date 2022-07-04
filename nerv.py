@@ -407,7 +407,7 @@ class NeRVLightningModule(LightningModule):
         return volume, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d * 2.0 - 1.0) * 0.5 + 0.5 # [0, 1] 
+        camera = self.camera_net(image2d) # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
