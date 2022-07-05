@@ -170,7 +170,7 @@ class NeRVDataModule(LightningDataModule):
         self.train_loader = DataLoader(
             self.train_datasets, 
             batch_size=self.batch_size, 
-            num_workers=4, 
+            num_workers=8, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -292,7 +292,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 400,
+            n_pts_per_ray = 256,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -316,13 +316,14 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1+5,
                 out_channels=self.shape, # value and alpha
                 # channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
-                channels=(20, 40, 80, 160, 320, 640), 
+                # channels=(20, 40, 80, 160, 320, 640), 
+                channels=(32, 64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="conv",
             ), 
@@ -337,13 +338,14 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=1, # value and alpha
                 # channels=(8, 16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
-                channels=(10, 20, 40, 80, 160, 320), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                # channels=(10, 20, 40, 80, 160, 320), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="conv",
             ), 
@@ -351,12 +353,12 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.camera_net = nn.Sequential(
-            DenseNet121(
+            DenseNet201(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
@@ -429,7 +431,7 @@ class NeRVLightningModule(LightningModule):
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -503,7 +505,7 @@ class NeRVLightningModule(LightningModule):
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -580,114 +582,6 @@ class NeRVLightningModule(LightningModule):
         opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         return opt
 
-def test_random_uniform_cameras(hparams, datamodule):
-    # Set up the environment
-    # device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
-    # cameras = RandomCameras(batch_size=hparams.batch_size, random=True).to(device)
-
-    # render_size describes the size of both sides of the 
-    # rendered images in pixels. We set this to the same size
-    # as the target images. I.e. we render at the same
-    # size as the ground truth images.
-    render_size = hparams.shape
-
-    # Our rendered scene is centered around (0,0,0) 
-    # and is enclosed inside a bounding box
-    # whose side is roughly equal to 3.0 (world units).
-    volume_extent_world = 5.0
-
-    # 1) Instantiate the raysampler.
-    # Here, NDCMultinomialRaysampler generates a rectangular image
-    # grid of rays whose coordinates follow the PyTorch3D
-    # coordinate conventions.
-    # Since we use a volume of size 256^3, we sample n_pts_per_ray=150,
-    # which roughly corresponds to a one ray-point per voxel.
-    # We further set the min_depth=0.1 since there is no surface within
-    # 0.1 units of any camera plane.
-    raysampler = NDCMultinomialRaysampler(
-        image_width=render_size,
-        image_height=render_size,
-        n_pts_per_ray=512,
-        min_depth=0.001,
-        max_depth=volume_extent_world,
-    )
-
-
-    # 2) Instantiate the raymarcher.
-    # Here, we use the standard EmissionAbsorptionRaymarcher 
-    # which marches along each ray in order to render
-    # each ray into a single 3D color vector 
-    # and an opacity scalar.
-    # raymarcher = EmissionAbsorptionRaymarcher()
-    raymarcher = EmissionAbsorptionRaymarcher()
-
-    # Finally, instantiate the volumetric render
-    # with the raysampler and raymarcher objects.
-    renderer = VolumeRenderer(
-        raysampler=raysampler, 
-        raymarcher=raymarcher,
-    )
-
-    # Instantiate the volumetric model.
-    # We use a cubical volume with the size of 
-    # one side = 256. The size of each voxel of the volume 
-    # is set to volume_extent_world / volume_shape s.t. the
-    # volume represents the space enclosed in a 3D bounding box
-    # centered at (0, 0, 0) with the size of each side equal to 3.
-    volume_shape = hparams.shape
-    volume_model = VolumeModel(
-        renderer,
-        # volume_shape = [volume_shape]*3, 
-        # voxel_size = volume_extent_world / volume_shape,
-    ).to(device)
-
-
-    debug_data = first(datamodule.val_dataloader())
-    image3d = debug_data['image3d'].to(device)
-    volumes = Volumes(
-        features = torch.cat([image3d]*3, dim=1),
-        densities = torch.ones_like(image3d) / 512., #image3d / 512., 
-        #torch.ones_like(image3d) / 512., # modify here
-        voxel_size = 3.2 / volume_shape,
-    )
-
-    #
-    # Set up the camera
-    #
-    cam_mu = {
-        "dist": 3.7,
-        "elev": 0.0,
-        "azim": 0.0,
-        "fov": 60.,
-        "aspect_ratio": 1.0,
-    }
-    cam_bw = {
-        "dist": 0.3,
-        "elev": 20.,
-        "azim": 20.,
-        "fov": 20.,
-        "aspect_ratio": 0.1
-    }
-    cam_ft = torch.Tensor(hparams.batch_size, 6).uniform_(-1, 1)
-    print(cam_ft)
-    cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                  batch_size=hparams.batch_size, 
-                                  cam_mu=cam_mu,
-                                  cam_bw=cam_bw,
-                                  cam_ft=None,
-                                  random=True)
-    cameras = cameras.to(device)
-
-    #
-    # Smoke test random cameras
-    #
-    screens = volume_model(cameras=cameras, volumes=volumes)
-
-    for idx in range(hparams.batch_size):
-        torchvision.utils.save_image(screens[idx,0,:,:].detach().cpu(), 
-            f'test_camera_{idx}_features_{cam_ft[idx, 0]:.4f}_{cam_ft[idx, 1]:.4f}_{cam_ft[idx, 2]:.4f}_{cam_ft[idx, 3]:.4f}_{cam_ft[idx, 4]:.4f}_{cam_ft[idx, 5]:.4f}.png')
-
 if __name__ == "__main__":
     parser = ArgumentParser()
     # System arguments: --gpus is default argument for cli
@@ -716,6 +610,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
     parser.add_argument("--datadir", type=str, default='data', help="data directory")
+    parser.add_argument("--reduction", type=str, default='mean', help="mean or sum")
 
     parser = Trainer.add_argparse_args(parser)
     
