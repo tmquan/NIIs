@@ -170,7 +170,7 @@ class NeRVDataModule(LightningDataModule):
         self.train_loader = DataLoader(
             self.train_datasets, 
             batch_size=self.batch_size, 
-            num_workers=8, 
+            num_workers=4, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
