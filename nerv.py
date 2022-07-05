@@ -39,7 +39,7 @@ class ScreenModel(nn.Module):
 
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
         screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
-        normalized = lambda x: (x - x.min())/(x.max() - x.min())
+        normalized = lambda x: (x - x.min())/(x.max() - x.min() + 1e-8)
         standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
         if norm_type == "normalized":
             screen_RGB = normalized(screen_RGB)
