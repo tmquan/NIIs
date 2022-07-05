@@ -263,9 +263,9 @@ cam_mu = {
 }
 cam_bw = {
     "dist": 0.4,
-    "elev": 20.,
-    "azim": 20.,
-    "fov": 20.,
+    "elev": 30.,
+    "azim": 30.,
+    "fov": 30.,
     "aspect_ratio": 0.2
 }
 
@@ -287,12 +287,13 @@ class NeRVLightningModule(LightningModule):
         self.kappa = hparams.kappa
         self.gamma = hparams.gamma
         self.delta = hparams.delta
+        self.reduction = hparams.reduction
         self.save_hyperparameters()
 
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 256,
+            n_pts_per_ray = 300,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -368,7 +369,7 @@ class NeRVLightningModule(LightningModule):
         # self.volume_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         
-        self.l1loss = nn.L1Loss(reduction='mean')
+        self.l1loss = nn.L1Loss(reduction=self.reduction)
         # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
