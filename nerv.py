@@ -293,7 +293,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 300,
+            n_pts_per_ray = 256,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -311,13 +311,11 @@ class NeRVLightningModule(LightningModule):
             renderer = self.visualizer,
         )
 
-        self.volume_net = nn.Sequential(
+        self.reform_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
                 in_channels=1+5,
-                out_channels=self.shape, # value and alpha
-                # channels=(16, 32, 64, 128, 256, 512), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
-                # channels=(20, 40, 80, 160, 320, 640), 
+                out_channels=self.shape,
                 channels=(32, 64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
@@ -325,7 +323,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -337,9 +335,7 @@ class NeRVLightningModule(LightningModule):
             UNet(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=1, # value and alpha
-                # channels=(8, 16, 32, 64, 128, 256), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
-                # channels=(10, 20, 40, 80, 160, 320), #(20, 40, 80, 160, 320), #(32, 64, 128, 256, 512),
+                out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
@@ -347,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -360,16 +356,15 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
         )
 
-        # self.volume_net.apply(_weights_init)
+        # self.reform_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
-        
-        self.l1loss = nn.L1Loss(reduction=self.reduction)
+        self.l1loss = nn.L1Loss(reduction="sum")
         # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
@@ -380,7 +375,7 @@ class NeRVLightningModule(LightningModule):
 
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        _, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
         recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
         return recimg_ct
 
@@ -405,9 +400,9 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        volume = self.volume_net(concat * 2.0 - 1.0) * 0.5 + 0.5
-        refine = self.refine_net(volume * 2.0 - 1.0) * 0.5 + 0.5
-        return volume, refine
+        reform = self.reform_net(concat * 2.0 - 1.0) * 0.5 + 0.5
+        refine = self.refine_net(reform * 2.0 - 1.0) * 0.5 + 0.5
+        return reform, refine
     
     def forward_camera(self, image2d: torch.Tensor):
         camera = self.camera_net(image2d) # [0, 1] 
@@ -429,7 +424,7 @@ class NeRVLightningModule(LightningModule):
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
@@ -462,12 +457,6 @@ class NeRVLightningModule(LightningModule):
                                    recimg_ct, 
                                    estimg_xr], dim=-1),
                         ], dim=-2)
-                # viz = torch.cat([orgvol_ct[...,self.shape//2],                                  
-                #                  estimg_ct,
-                #                  recimg_ct,
-                #                  estvol_ct[...,self.shape//2], 
-                #                  orgimg_xr,
-                #                  estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
@@ -483,7 +472,7 @@ class NeRVLightningModule(LightningModule):
         # elif optimizer_idx==1:
         #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
         #     return info
-        info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss} 
+        info = {'loss': 1e0*im3d_loss + 1e2*im2d_loss + 1e6*cams_loss} 
         return info
 
         
@@ -503,7 +492,7 @@ class NeRVLightningModule(LightningModule):
 
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
+        _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
@@ -511,10 +500,6 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                #   + self.l1loss(estmid_xr, estvol_xr) \
-                #   + self.l1loss(recmid_xr, recvol_xr) \
-                #   + self.l1loss(estmid_xr, recmid_xr) \
-                #   + self.l1loss(estvol_xr, recvol_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
@@ -522,7 +507,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
 
-        info = {'loss': 10*im3d_loss + im2d_loss + 2*cams_loss}
+        info = {'loss': 1e0*im3d_loss + 1e2*im2d_loss + 1e6*cams_loss}
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
@@ -538,12 +523,6 @@ class NeRVLightningModule(LightningModule):
                                    recimg_ct, 
                                    estimg_xr], dim=-1),
                         ], dim=-2)
-                # viz = torch.cat([orgvol_ct[...,self.shape//2], 
-                #                  estvol_ct[...,self.shape//2], 
-                #                  estimg_ct,
-                #                  recimg_ct,
-                #                  orgimg_xr,
-                #                  estimg_xr], dim=-1)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
@@ -576,7 +555,7 @@ class NeRVLightningModule(LightningModule):
 
     def configure_optimizers(self):
         # opt_vol = torch.optim.RAdam([
-        #         {'params': self.volume_net.parameters()},
+        #         {'params': self.reform_net.parameters()},
         #         {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
         # opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
         # return opt_vol, opt_cam
@@ -585,9 +564,7 @@ class NeRVLightningModule(LightningModule):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    # System arguments: --gpus is default argument for cli
-    # parser.add_argument("--gpus", type=int, default=0, help="number of GPUs")
-    parser.add_argument("--conda_env", type=str, default="NeRP")
+    parser.add_argument("--conda_env", type=str, default="NeRV")
     parser.add_argument("--notification_email", type=str, default="quantm88@gmail.com")
     
     # Model arguments
@@ -611,7 +588,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
     parser.add_argument("--datadir", type=str, default='data', help="data directory")
-    parser.add_argument("--reduction", type=str, default='mean', help="mean or sum")
+    parser.add_argument("--reduction", type=str, default='sum', help="mean or sum")
 
     parser = Trainer.add_argparse_args(parser)
     
