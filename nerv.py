@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -343,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout_prob=0.5,
+                # dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
