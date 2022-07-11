@@ -137,8 +137,8 @@ class NeRVDataModule(LightningDataModule):
                         minv=0.0,
                         maxv=1.0),
 
-                RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
-                RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
+                # RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
+                # RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
@@ -148,9 +148,9 @@ class NeRVDataModule(LightningDataModule):
                                max_roi_scale=(1.0, 1.0, 0.8), 
                                random_center=True, 
                                random_size=True),
-                RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
-                CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
-                CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
+                # RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
+                # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
+                # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
@@ -220,8 +220,8 @@ class NeRVDataModule(LightningDataModule):
                 ScaleIntensityd(keys=["image3d"], 
                         minv=0.0,
                         maxv=1.0),
-                CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
-                CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
+                # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
+                # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
@@ -472,7 +472,7 @@ class NeRVLightningModule(LightningModule):
         # elif optimizer_idx==1:
         #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
         #     return info
-        info = {'loss': 1e0*im3d_loss + 1e2*im2d_loss + 1e6*cams_loss} 
+        info = {'loss': 1e2*im3d_loss + 1e4*im2d_loss + 1e8*cams_loss} 
         return info
 
         
@@ -507,7 +507,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
 
-        info = {'loss': 1e0*im3d_loss + 1e2*im2d_loss + 1e6*cams_loss}
+        info = {'loss': 1e2*im3d_loss + 1e4*im2d_loss + 1e8*cams_loss}
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
