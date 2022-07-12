@@ -102,7 +102,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -186,7 +186,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -362,6 +362,24 @@ class NeRVLightningModule(LightningModule):
             nn.LeakyReLU()
         )
 
+        self.opaque_net = nn.Sequential(
+            UNet(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=1, 
+                channels=(16, 32, 64, 128, 256, 512),
+                strides=(2, 2, 2, 2, 2),
+                num_res_units=3,
+                kernel_size=3,
+                up_kernel_size=3,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                dropout=0.5,
+                # mode="conv",
+            ), 
+            nn.Tanh()  
+        )
+
         # self.reform_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         self.l1loss = nn.L1Loss(reduction="sum")
@@ -387,10 +405,11 @@ class NeRVLightningModule(LightningModule):
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
-
+        features = torch.cat([image3d]*3, dim=1)
+        densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
         volumes = Volumes(
-            features = torch.cat([image3d]*3, dim=1),
-            densities = torch.ones_like(image3d) / 400, 
+            features = features,
+            densities = densities / 256.,
             voxel_size = 3.2 / self.shape,
         )
         screen = self.viewer(volumes=volumes, cameras=cameras)
