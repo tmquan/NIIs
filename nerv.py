@@ -101,7 +101,7 @@ class NeRVDataModule(LightningDataModule):
                 Spacingd(keys=["image3d"], pixdim=(1.0, 1.0, 1.0), mode=["bilinear"]),  
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
-                    # Orientationd(keys=('image3d'), axcodes="ARI"),
+                    Orientationd(keys=('image3d'), axcodes="ARI"),
                     Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
@@ -143,11 +143,11 @@ class NeRVDataModule(LightningDataModule):
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
 
-                RandScaleCropd(keys=["image3d"], 
-                               roi_scale=(0.9, 0.9, 0.8), 
-                               max_roi_scale=(1.0, 1.0, 0.8), 
-                               random_center=True, 
-                               random_size=True),
+                # RandScaleCropd(keys=["image3d"], 
+                #                roi_scale=(0.9, 0.9, 0.8), 
+                #                max_roi_scale=(1.0, 1.0, 0.8), 
+                #                random_center=True, 
+                #                random_size=True),
                 # RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
                 # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
                 # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
@@ -185,7 +185,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
-                    # Orientationd(keys=('image3d'), axcodes="ARI"),
+                    Orientationd(keys=('image3d'), axcodes="ARI"),
                     Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -343,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
@@ -472,7 +472,7 @@ class NeRVLightningModule(LightningModule):
         # elif optimizer_idx==1:
         #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
         #     return info
-        info = {'loss': 1e2*im3d_loss + 1e4*im2d_loss + 1e8*cams_loss} 
+        info = {'loss': 1e2*im3d_loss + 1e5*im2d_loss + 1e8*cams_loss} 
         return info
 
         
@@ -507,7 +507,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
 
-        info = {'loss': 1e2*im3d_loss + 1e4*im2d_loss + 1e8*cams_loss}
+        info = {'loss': 1e2*im3d_loss + 1e5*im2d_loss + 1e8*cams_loss}
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
