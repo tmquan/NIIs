@@ -428,10 +428,17 @@ class NeRVLightningModule(LightningModule):
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        orgvol_ct = batch["image3d"]
-        orgimg_xr = batch["image2d"]
-        _device = orgvol_ct.device
-
+        _device = batch["image3d"].device
+        
+        if batch_idx%2==0:
+            orgvol_ct = batch["image3d"]
+            orgimg_xr = batch["image2d"]
+        else:
+            #torch.rand_like(batch["image3d"])
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            #torch.rand_like(batch["image2d"])
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
         _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
@@ -440,9 +447,11 @@ class NeRVLightningModule(LightningModule):
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        with torch.no_grad(): # random cam to train
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        # orgcam_ct = estcam_xr.detach()
+        if batch_idx%2==0:
+            with torch.no_grad(): # random cam to train
+                orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        else:
+            orgcam_ct = estcam_xr.detach()
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
