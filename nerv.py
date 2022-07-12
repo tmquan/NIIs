@@ -432,22 +432,23 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         _device = orgvol_ct.device
 
-        # CT path
-        with torch.no_grad():
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
-
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
         _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
-        
+
+        # CT path
+        with torch.no_grad(): # random cam to train
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        # orgcam_ct = estcam_xr.detach()
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct = self.forward_camera(estimg_ct)
+        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
+
+
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
@@ -500,21 +501,21 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         _device = orgvol_ct.device
 
-        # CT path
-        with torch.no_grad():
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
-
         # XR path
         estcam_xr = self.forward_camera(orgimg_xr)
         _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+
+        # CT path
+        # with torch.no_grad():
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        orgcam_ct = estcam_xr.detach() # image-based cam to eval
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estcam_ct = self.forward_camera(estimg_ct)
+        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
