@@ -655,7 +655,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=2,
+        accumulate_grad_batches=4,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
