@@ -463,12 +463,12 @@ class NeRVLightningModule(LightningModule):
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
+        
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
-        info = {'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
-
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
 
         if batch_idx == 0:
             with torch.no_grad():
