@@ -428,7 +428,7 @@ class NeRVLightningModule(LightningModule):
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        return self.evaluation_step(batch, batch_idx, stage=stage)):   
+        return self.evaluation_step(batch, batch_idx, stage=stage)   
 
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
