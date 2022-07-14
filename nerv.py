@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -343,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout_prob=0.5,
+                # dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
@@ -374,7 +374,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -382,7 +382,7 @@ class NeRVLightningModule(LightningModule):
 
         # self.reform_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
-        self.l1loss = nn.L1Loss(reduction="sum")
+        self.l1loss = nn.L1Loss(reduction="mean")
         # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
@@ -428,77 +428,8 @@ class NeRVLightningModule(LightningModule):
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        _device = batch["image3d"].device
-        orgvol_ct = batch["image3d"]
-        orgimg_xr = batch["image2d"]
+        return self.evaluation_step(batch, batch_idx, stage=stage)):   
 
-        if batch_idx%4==2:
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%4==3:
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        
-        # XR path
-        estcam_xr = self.forward_camera(orgimg_xr)
-        _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
-        reccam_xr = self.forward_camera(estimg_xr)
-        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
-
-        # CT path
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
-
-
-        # Loss
-        im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(orgvol_ct, estmid_ct) \
-                #   + self.l1loss(estmid_xr, estvol_xr) \
-                #   + self.l1loss(recmid_xr, recvol_xr) \
-                #   + self.l1loss(estmid_xr, recmid_xr) \
-                #   + self.l1loss(estvol_xr, recvol_xr) \
-
-        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-                  + self.l1loss(orgimg_xr, estimg_xr) \
-                    
-        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(estcam_xr, reccam_xr) \
-        
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=True, logger=True)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=True, logger=True)
-
-        if batch_idx == 0:
-            with torch.no_grad():
-                viz = torch.cat([
-                        torch.cat([orgvol_ct[...,self.shape//2], 
-                                   estimg_ct,
-                                   orgimg_xr], dim=-1),
-                        torch.cat([estvol_ct[...,self.shape//2],
-                                   recimg_ct, 
-                                   estimg_xr], dim=-1),
-                        ], dim=-2)
-                grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
-                tensorboard = self.logger.experiment
-                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
-
-                plot_2d_or_3d_image(data=torch.cat([orgvol_ct, 
-                                                    estvol_ct, 
-                                                    estvol_xr], dim=-2), 
-                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-
-        # if optimizer_idx==0:
-        #     info = {'loss': 1e1*im3d_loss+1e0*im2d_loss}
-        #     return info
-        # elif optimizer_idx==1:
-        #     info = {'loss': 2e0*cams_loss+1e0*im2d_loss}
-        #     return info
-        info = {'loss': 1e2*im3d_loss + 1e5*im2d_loss + 1e8*cams_loss} 
-        return info
-
-        
     def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
@@ -533,7 +464,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(estcam_xr, reccam_xr) \
 
-        info = {'loss': 1e2*im3d_loss + 1e5*im2d_loss + 1e8*cams_loss}
+        info = {'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True)
