@@ -428,9 +428,9 @@ class NeRVLightningModule(LightningModule):
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        return self.evaluation_step(batch, batch_idx, stage=stage)   
+        return self.__common_step(batch, batch_idx, stage=stage)   
 
-    def evaluation_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
+    def __common_step(self, batch, batch_idx, stage: Optional[str]='__common'):   
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
@@ -497,23 +497,23 @@ class NeRVLightningModule(LightningModule):
         return info
         
     def validation_step(self, batch, batch_idx):
-        return self.evaluation_step(batch, batch_idx, stage='validation')
+        return self.__common_step(batch, batch_idx, stage='validation')
 
     def test_step(self, batch, batch_idx):
-        return self.evaluation_step(batch, batch_idx, stage='test')
+        return self.__common_step(batch, batch_idx, stage='test')
 
-    def evaluation_epoch_end(self, outputs, stage: Optional[str]='evaluation'):
+    def __common_epoch_end(self, outputs, stage: Optional[str]='__common'):
         loss = torch.stack([x[f'loss'] for x in outputs]).mean()
         self.log(f'{stage}_loss_epoch', loss, on_step=False, prog_bar=True, logger=True)
 
     def train_epoch_end(self, outputs):
-        return self.evaluation_epoch_end(outputs, stage='train')
+        return self.__common_epoch_end(outputs, stage='train')
 
     def validation_epoch_end(self, outputs):
-        return self.evaluation_epoch_end(outputs, stage='validation')
+        return self.__common_epoch_end(outputs, stage='validation')
     
     def test_epoch_end(self, outputs):
-        return self.evaluation_epoch_end(outputs, stage='test')
+        return self.__common_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
         # opt_vol = torch.optim.RAdam([
