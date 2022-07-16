@@ -435,23 +435,32 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
 
-        if batch_idx%4==1:
+        if batch_idx%5==0:
+            orgcam_xr = self.forward_camera(orgimg_xr)
+            orgcam_ct = orgcam_xr.detach()
+        elif batch_idx%5==1:
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%4==2:
+        elif batch_idx%5==2:
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%4==3:
+        elif batch_idx%5==3:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        elif batch_idx%5==4:
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+               
         
         # XR path
-        estcam_xr = self.forward_camera(orgimg_xr)
-        _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
+        orgcam_xr = self.forward_camera(orgimg_xr)
+        _, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
@@ -467,7 +476,7 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(orgimg_xr, estimg_xr) \
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(estcam_xr, reccam_xr) \
+                  + self.l1loss(orgcam_xr, reccam_xr) \
         
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
@@ -588,7 +597,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=4,
+        accumulate_grad_batches=5,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
