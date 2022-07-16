@@ -434,8 +434,9 @@ class NeRVLightningModule(LightningModule):
         _device = batch["image3d"].device
 
         if batch_idx%10==0:
-            orgcam_xr = self.forward_camera(batch["image2d"])
-            orgcam_ct = orgcam_xr.detach() 
+            # orgcam_xr = self.forward_camera(batch["image2d"])
+            # orgcam_ct = orgcam_xr.detach() 
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = batch["image3d"]
             orgimg_xr = batch["image2d"]
         elif batch_idx%10==1:
@@ -443,13 +444,15 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = batch["image3d"]
             orgimg_xr = batch["image2d"]
         elif batch_idx%10==2:
-            orgcam_xr = self.forward_camera(batch["image2d"])
-            orgcam_ct = orgcam_xr.detach() 
+            # orgcam_xr = self.forward_camera(batch["image2d"])
+            # orgcam_ct = orgcam_xr.detach() 
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = batch["image2d"]
         elif batch_idx%10==3:
-            orgcam_xr = self.forward_camera(batch["image2d"])
-            orgcam_ct = orgcam_xr.detach() 
+            # orgcam_xr = self.forward_camera(batch["image2d"])
+            # orgcam_ct = orgcam_xr.detach() 
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = batch["image3d"]
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         elif batch_idx%10==4:
@@ -461,8 +464,9 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = batch["image3d"]
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         elif batch_idx%10==6:
-            orgcam_xr = self.forward_camera(batch["image2d"])
-            orgcam_ct = orgcam_xr.detach() 
+            # orgcam_xr = self.forward_camera(batch["image2d"])
+            # orgcam_ct = orgcam_xr.detach() 
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         else:
