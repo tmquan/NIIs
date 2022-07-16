@@ -432,17 +432,38 @@ class NeRVLightningModule(LightningModule):
 
     def __common_step(self, batch, batch_idx, stage: Optional[str]='__common'):   
         _device = batch["image3d"].device
-        orgvol_ct = batch["image3d"]
-        orgimg_xr = batch["image2d"]
 
-        if batch_idx%5==0:
-            orgcam_xr = self.forward_camera(orgimg_xr)
-            orgcam_ct = orgcam_xr.detach()
-        elif batch_idx%5==1:
+        if batch_idx%10==0:
+            orgcam_xr = self.forward_camera(batch["image2d"])
+            orgcam_ct = orgcam_xr.detach() 
+            orgvol_ct = batch["image3d"]
+            orgimg_xr = batch["image2d"]
+        elif batch_idx%10==1:
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+            orgvol_ct = batch["image3d"]
+            orgimg_xr = batch["image2d"]
+        elif batch_idx%10==2:
+            orgcam_xr = self.forward_camera(batch["image2d"])
+            orgcam_ct = orgcam_xr.detach() 
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            orgimg_xr = batch["image2d"]
+        elif batch_idx%10==3:
+            orgcam_xr = self.forward_camera(batch["image2d"])
+            orgcam_ct = orgcam_xr.detach() 
+            orgvol_ct = batch["image3d"]
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        elif batch_idx%10==4:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%5==2:
+            orgimg_xr = batch["image2d"]
+        elif batch_idx%10==5:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+            orgvol_ct = batch["image3d"]
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        elif batch_idx%10==6:
+            orgcam_xr = self.forward_camera(batch["image2d"])
+            orgcam_ct = orgcam_xr.detach() 
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         else:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
@@ -594,7 +615,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=5,
+        accumulate_grad_batches=10,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
