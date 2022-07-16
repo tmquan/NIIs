@@ -338,7 +338,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
@@ -369,7 +369,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
@@ -405,11 +405,11 @@ class NeRVLightningModule(LightningModule):
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
-        features = torch.cat([image3d]*3, dim=1)
+        features = image3d.repeat(1, 3, 1, 1, 1) #torch.cat([image3d]*3, dim=1)
         densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
         volumes = Volumes(
             features = features,
-            densities = densities / 256.,
+            densities = densities / 64.,
             voxel_size = 3.2 / self.shape,
         )
         screen = self.viewer(volumes=volumes, cameras=cameras)
@@ -448,7 +448,7 @@ class NeRVLightningModule(LightningModule):
         _, estvol_xr = self.forward_volume(orgimg_xr, estcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, estcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
@@ -460,8 +460,8 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                #   + self.l1loss(estvol_xr, recvol_xr) \
-                #   + self.l1loss(estvol_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
+                  + self.l1loss(estvol_xr, recmid_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
