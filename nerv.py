@@ -33,7 +33,7 @@ class ScreenModel(nn.Module):
         super().__init__()
         self._renderer = renderer
         
-    def forward(self, cameras, volumes, norm_type="standardized"):
+    def forward(self, cameras, volumes, norm_type="normalized"):
         screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         rays_points = ray_bundle_to_ray_points(ray_bundles)
 
@@ -412,7 +412,7 @@ class NeRVLightningModule(LightningModule):
             densities = densities / 64.,
             voxel_size = 3.2 / self.shape,
         )
-        screen = self.viewer(volumes=volumes, cameras=cameras)
+        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type="normalized")
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
@@ -480,7 +480,7 @@ class NeRVLightningModule(LightningModule):
         _, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, orgcam_xr)
         reccam_xr = self.forward_camera(estimg_xr)
-        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
@@ -491,8 +491,8 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                  # + self.l1loss(estvol_xr, recvol_xr) \
-                  # + self.l1loss(estvol_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
+                  + self.l1loss(estvol_xr, recmid_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
