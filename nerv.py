@@ -398,21 +398,26 @@ class NeRVLightningModule(LightningModule):
         return recimg_ct
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
-        factor: float=None, weight: float=None, is_deterministic: bool=False,
-        norm_type: str="standardized"):
+        factor: float=64.0, 
+        is_deterministic: bool=True,
+        norm_type: str="normalized"
+    ) -> torch.Tensor:
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                                 batch_size=self.batch_size, 
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
         features = image3d.repeat(1, 3, 1, 1, 1) #torch.cat([image3d]*3, dim=1)
-        densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
+        if is_deterministic:
+            densities = torch.ones_like(image3d)
+        else:
+            densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
         volumes = Volumes(
             features = features,
-            densities = densities / 64.,
+            densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
-        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type="normalized")
+        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
@@ -433,67 +438,95 @@ class NeRVLightningModule(LightningModule):
     def __common_step(self, batch, batch_idx, stage: Optional[str]='__common'):   
         _device = batch["image3d"].device
 
-        if batch_idx%10==0:
+        # if batch_idx%10==0:
+        #     # orgcam_xr = self.forward_camera(batch["image2d"])
+        #     # orgcam_ct = orgcam_xr.detach() 
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = batch["image3d"]
+        #     orgimg_xr = batch["image2d"]
+        # elif batch_idx%10==1:
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = batch["image3d"]
+        #     orgimg_xr = batch["image2d"]
+        # elif batch_idx%10==2:
+        #     # orgcam_xr = self.forward_camera(batch["image2d"])
+        #     # orgcam_ct = orgcam_xr.detach() 
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = batch["image2d"]
+        # elif batch_idx%10==3:
+        #     # orgcam_xr = self.forward_camera(batch["image2d"])
+        #     # orgcam_ct = orgcam_xr.detach() 
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = batch["image3d"]
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # elif batch_idx%10==4:
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = batch["image2d"]
+        # elif batch_idx%10==5:
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = batch["image3d"]
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # elif batch_idx%10==6:
+        #     # orgcam_xr = self.forward_camera(batch["image2d"])
+        #     # orgcam_ct = orgcam_xr.detach() 
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # else:
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+
+        if batch_idx%5==0:
             # orgcam_xr = self.forward_camera(batch["image2d"])
             # orgcam_ct = orgcam_xr.detach() 
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = batch["image3d"]
             orgimg_xr = batch["image2d"]
-        elif batch_idx%10==1:
+        elif batch_idx%5==1:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = batch["image3d"]
             orgimg_xr = batch["image2d"]
-        elif batch_idx%10==2:
+        elif batch_idx%5==2:
             # orgcam_xr = self.forward_camera(batch["image2d"])
             # orgcam_ct = orgcam_xr.detach() 
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = batch["image2d"]
-        elif batch_idx%10==3:
+        elif batch_idx%5==3:
             # orgcam_xr = self.forward_camera(batch["image2d"])
             # orgcam_ct = orgcam_xr.detach() 
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = batch["image3d"]
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%10==4:
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = batch["image2d"]
-        elif batch_idx%10==5:
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = batch["image3d"]
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%10==6:
-            # orgcam_xr = self.forward_camera(batch["image2d"])
-            # orgcam_ct = orgcam_xr.detach() 
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         else:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-     
+            orgimg_xr = torch.distributio
+
         
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr)
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
                   + self.l1loss(estvol_xr, recvol_xr) \
                   + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, estmid_xr) \
+                  + self.l1loss(recvol_xr, estvol_xr) \
+                  + self.l1loss(recvol_xr, estmid_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
@@ -620,7 +653,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=10,
+        accumulate_grad_batches=5,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
