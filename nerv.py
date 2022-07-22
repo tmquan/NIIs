@@ -511,15 +511,15 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, norm_type="normalized")
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=32.0, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, norm_type="normalized")
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=32.0, norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, norm_type="normalized")
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=32.0, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
