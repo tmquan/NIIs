@@ -386,20 +386,21 @@ class NeRVLightningModule(LightningModule):
         # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
-        orgvol_ct = image3d
-        # Generate deterministic cameras
-        with torch.no_grad():
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device)
+        # orgvol_ct = image3d
+        # # Generate stochastic cameras
+        # with torch.no_grad():
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device)
 
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        estcam_ct = self.forward_camera(estimg_ct)
-        _, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
-        return recimg_ct
+        # estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
+        # estcam_ct = self.forward_camera(estimg_ct)
+        # _, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+        # recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
+        # return recimg_ct
+        pass
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
-        factor: float=64.0, 
-        is_deterministic: bool=True,
+        factor: float=1.0, 
+        is_deterministic: bool=False,
         norm_type: str="normalized"
     ) -> torch.Tensor:
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
@@ -429,8 +430,8 @@ class NeRVLightningModule(LightningModule):
         return reform, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) # [0, 1] 
-        return camera
+        camera_feat = self.camera_net(image2d) # [0, 1] 
+        return camera_feat
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
         return self.__common_step(batch, batch_idx, stage=stage)   
@@ -504,7 +505,7 @@ class NeRVLightningModule(LightningModule):
         else:
             orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = torch.distributio
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
         
         # XR path
@@ -512,7 +513,7 @@ class NeRVLightningModule(LightningModule):
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, norm_type="normalized")
@@ -523,10 +524,10 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
-                  + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(recvol_xr, estvol_xr) \
-                  + self.l1loss(recvol_xr, estmid_xr) \
+                #   + self.l1loss(estvol_xr, recvol_xr) \
+                #   + self.l1loss(estvol_xr, recmid_xr) \
+                #   + self.l1loss(recvol_xr, estvol_xr) \
+                #   + self.l1loss(recvol_xr, estmid_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
