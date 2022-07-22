@@ -321,9 +321,9 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -341,12 +341,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
-            nn.Tanh()  
+            # nn.Tanh()  
         )
 
         self.camera_net = nn.Sequential(
@@ -354,12 +354,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout_prob=0.5,
+                # dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.LeakyReLU()
+            nn.ELU()
         )
 
         self.opaque_net = nn.Sequential(
@@ -372,12 +372,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                act=("ELU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
                 # mode="conv",
             ), 
-            nn.Tanh()  
+            # nn.Tanh()  
         )
 
         # self.reform_net.apply(_weights_init)
