@@ -323,7 +323,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
@@ -343,7 +343,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
@@ -374,7 +374,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -513,7 +513,7 @@ class NeRVLightningModule(LightningModule):
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
         estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
-        # recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
         estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, norm_type="normalized")
@@ -524,10 +524,10 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                #   + self.l1loss(estvol_xr, recvol_xr) \
-                #   + self.l1loss(estvol_xr, recmid_xr) \
-                #   + self.l1loss(recvol_xr, estvol_xr) \
-                #   + self.l1loss(recvol_xr, estmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
+                  + self.l1loss(estvol_xr, recmid_xr) \
+                  + self.l1loss(recvol_xr, estvol_xr) \
+                  + self.l1loss(recvol_xr, estmid_xr) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
