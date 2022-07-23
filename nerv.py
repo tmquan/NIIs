@@ -587,6 +587,7 @@ if __name__ == "__main__":
             # ModelSummary(max_depth=-1), 
             # tensorboard_callback
         ],
+        accumulate_grad_batches=5, 
         # strategy="ddp_sharded",
         # precision=16,
         # stochastic_weight_avg=True,
