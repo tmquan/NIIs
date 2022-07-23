@@ -33,7 +33,7 @@ class ScreenModel(nn.Module):
         super().__init__()
         self._renderer = renderer
         
-    def forward(self, cameras, volumes, norm_type="normalized"):
+    def forward(self, cameras, volumes, norm_type="standardized"):
         screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         rays_points = ray_bundle_to_ray_points(ray_bundles)
 
@@ -311,24 +311,6 @@ class NeRVLightningModule(LightningModule):
             renderer = self.visualizer,
         )
 
-        self.opaque_net = nn.Sequential(
-            UNet(
-                spatial_dims=3,
-                in_channels=1,
-                out_channels=1, 
-                channels=(16, 32, 64, 128, 256, 512),
-                strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
-                kernel_size=3,
-                up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
-                # norm=Norm.BATCH,
-                # mode="conv",
-            ), 
-            nn.Tanh()  
-        )
-
         self.reform_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
@@ -340,13 +322,13 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
                 # norm=Norm.BATCH,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh()  
+            # nn.Tanh()  
         )
 
         self.refine_net = nn.Sequential(
@@ -356,12 +338,12 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
                 # norm=Norm.BATCH,
+                # dropout=0.5,
                 # mode="conv",
             ), 
             nn.Tanh()  
@@ -380,6 +362,23 @@ class NeRVLightningModule(LightningModule):
             nn.LeakyReLU()
         )
 
+        self.opaque_net = nn.Sequential(
+            UNet(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=1, 
+                channels=(16, 32, 64, 128, 256, 512),
+                strides=(2, 2, 2, 2, 2),
+                num_res_units=3,
+                kernel_size=3,
+                up_kernel_size=3,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
+                # mode="conv",
+            ), 
+            nn.Tanh()  
+        )
 
         # self.reform_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
@@ -387,16 +386,6 @@ class NeRVLightningModule(LightningModule):
         # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
-        # orgvol_ct = image3d
-        # # Generate stochastic cameras
-        # with torch.no_grad():
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(image3d.device)
-
-        # estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct)
-        # estcam_ct = self.forward_camera(estimg_ct)
-        # _, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        # recimg_ct = self.forward_screen(estvol_ct, estcam_ct)
-        # return recimg_ct
         pass
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
@@ -409,13 +398,13 @@ class NeRVLightningModule(LightningModule):
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
-        features = image3d.repeat(1, 3, 1, 1, 1) #torch.cat([image3d]*3, dim=1)
+        # features = image3d.repeat(1, 3, 1, 1, 1) #torch.cat([image3d]*3, dim=1)
         if is_deterministic:
             densities = torch.ones_like(image3d)
         else:
             densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
         volumes = Volumes(
-            features = features,
+            features = image3d, #features,
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
@@ -431,83 +420,22 @@ class NeRVLightningModule(LightningModule):
         return reform, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera_feat = self.camera_net(image2d) # [0, 1] 
-        return camera_feat
+        camera = self.camera_net(image2d) # [0, 1] 
+        return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        return self.__common_step(batch, batch_idx, stage=stage)   
+        return self._sharing_step(batch, batch_idx, stage=stage)   
 
-    def __common_step(self, batch, batch_idx, stage: Optional[str]='__common'):   
+    def _sharing_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
-
-        # if batch_idx%10==0:
-        #     # orgcam_xr = self.forward_camera(batch["image2d"])
-        #     # orgcam_ct = orgcam_xr.detach() 
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = batch["image3d"]
-        #     orgimg_xr = batch["image2d"]
-        # elif batch_idx%10==1:
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = batch["image3d"]
-        #     orgimg_xr = batch["image2d"]
-        # elif batch_idx%10==2:
-        #     # orgcam_xr = self.forward_camera(batch["image2d"])
-        #     # orgcam_ct = orgcam_xr.detach() 
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = batch["image2d"]
-        # elif batch_idx%10==3:
-        #     # orgcam_xr = self.forward_camera(batch["image2d"])
-        #     # orgcam_ct = orgcam_xr.detach() 
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = batch["image3d"]
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        # elif batch_idx%10==4:
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = batch["image2d"]
-        # elif batch_idx%10==5:
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = batch["image3d"]
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        # elif batch_idx%10==6:
-        #     # orgcam_xr = self.forward_camera(batch["image2d"])
-        #     # orgcam_ct = orgcam_xr.detach() 
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        # else:
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-
-        if batch_idx%5==0:
-            # orgcam_xr = self.forward_camera(batch["image2d"])
-            # orgcam_ct = orgcam_xr.detach() 
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = batch["image3d"]
-            orgimg_xr = batch["image2d"]
-        elif batch_idx%5==1:
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = batch["image3d"]
-            orgimg_xr = batch["image2d"]
-        elif batch_idx%5==2:
-            # orgcam_xr = self.forward_camera(batch["image2d"])
-            # orgcam_ct = orgcam_xr.detach() 
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        orgvol_ct = batch["image3d"]
+        orgimg_xr = batch["image2d"]
+        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+    
+        if batch_idx%4==2:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = batch["image2d"]
-        elif batch_idx%5==3:
-            # orgcam_xr = self.forward_camera(batch["image2d"])
-            # orgcam_ct = orgcam_xr.detach() 
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = batch["image3d"]
+        elif batch_idx%4==3:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        else:
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-
         
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
@@ -562,25 +490,26 @@ class NeRVLightningModule(LightningModule):
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
         return info
+
         
     def validation_step(self, batch, batch_idx):
-        return self.__common_step(batch, batch_idx, stage='validation')
+        return self._sharing_step(batch, batch_idx, stage='validation')
 
     def test_step(self, batch, batch_idx):
-        return self.__common_step(batch, batch_idx, stage='test')
+        return self._sharing_step(batch, batch_idx, stage='test')
 
-    def __common_epoch_end(self, outputs, stage: Optional[str]='__common'):
+    def evaluation_epoch_end(self, outputs, stage: Optional[str]='evaluation'):
         loss = torch.stack([x[f'loss'] for x in outputs]).mean()
         self.log(f'{stage}_loss_epoch', loss, on_step=False, prog_bar=True, logger=True)
 
     def train_epoch_end(self, outputs):
-        return self.__common_epoch_end(outputs, stage='train')
+        return self.evaluation_epoch_end(outputs, stage='train')
 
     def validation_epoch_end(self, outputs):
-        return self.__common_epoch_end(outputs, stage='validation')
+        return self.evaluation_epoch_end(outputs, stage='validation')
     
     def test_epoch_end(self, outputs):
-        return self.__common_epoch_end(outputs, stage='test')
+        return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
         # opt_vol = torch.optim.RAdam([
@@ -655,7 +584,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=5,
+        accumulate_grad_batches=4,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
