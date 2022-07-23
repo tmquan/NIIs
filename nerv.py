@@ -311,6 +311,24 @@ class NeRVLightningModule(LightningModule):
             renderer = self.visualizer,
         )
 
+        self.opaque_net = nn.Sequential(
+            UNet(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=1, 
+                channels=(16, 32, 64, 128, 256, 512),
+                strides=(2, 2, 2, 2, 2),
+                num_res_units=3,
+                kernel_size=3,
+                up_kernel_size=3,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
+                # mode="conv",
+            ), 
+            nn.Sigmoid()  
+        )
+
         self.reform_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
@@ -326,9 +344,9 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="conv",
             ), 
-            Flatten(),
+            # Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Tanh()  
+            # nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -346,11 +364,11 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="conv",
             ), 
-            nn.Tanh()  
+            nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
-            DenseNet201(
+            DenseNet121(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
@@ -362,28 +380,10 @@ class NeRVLightningModule(LightningModule):
             nn.LeakyReLU()
         )
 
-        self.opaque_net = nn.Sequential(
-            UNet(
-                spatial_dims=3,
-                in_channels=1,
-                out_channels=1, 
-                channels=(16, 32, 64, 128, 256, 512),
-                strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
-                kernel_size=3,
-                up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="conv",
-            ), 
-            nn.Tanh()  
-        )
-
+        # self.opaque_net.apply(_weights_init)
         # self.reform_net.apply(_weights_init)
         # self.refine_net.apply(_weights_init)
         self.l1loss = nn.L1Loss(reduction="mean")
-        # self.example_input_array = torch.zeros(2, 1, self.shape, self.shape, self.shape)
         
     def forward(self, image3d):
         pass
@@ -398,13 +398,14 @@ class NeRVLightningModule(LightningModule):
                                 cam_mu=cam_mu,
                                 cam_bw=cam_bw,
                                 cam_ft=camera_feat*2. - 1.).to(image3d.device)
-        # features = image3d.repeat(1, 3, 1, 1, 1) #torch.cat([image3d]*3, dim=1)
-        if is_deterministic:
-            densities = torch.ones_like(image3d)
-        else:
-            densities = self.opaque_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
+        features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
+        if not is_deterministic:
+            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
+        # else:
+        #     densities = torch.ones_like(image3d)
+        
         volumes = Volumes(
-            features = image3d, #features,
+            features = features, 
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
@@ -415,8 +416,8 @@ class NeRVLightningModule(LightningModule):
         concat = torch.cat([image2d, 
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
-        reform = self.reform_net(concat * 2.0 - 1.0) * 0.5 + 0.5
-        refine = self.refine_net(reform * 2.0 - 1.0) * 0.5 + 0.5
+        reform = self.reform_net(concat)# * 2.0 - 1.0) * 0.5 + 0.5
+        refine = self.refine_net(reform)# * 2.0 - 1.0) * 0.5 + 0.5
         return reform, refine
     
     def forward_camera(self, image2d: torch.Tensor):
@@ -432,9 +433,12 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
     
-        if batch_idx%4==2:
+        if batch_idx%4==1:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        elif batch_idx%4==2:
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         elif batch_idx%4==3:
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         
         # XR path
@@ -584,12 +588,11 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         # strategy="ddp_sharded",
-        accumulate_grad_batches=4,
         # precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
-        gradient_clip_val=5, 
-        gradient_clip_algorithm='norm', #'norm', #'value'
+        # gradient_clip_val=5, 
+        # gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
         # detect_anomaly=True, 
         # profiler="simple",
