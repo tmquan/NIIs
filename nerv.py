@@ -112,42 +112,29 @@ class NeRVDataModule(LightningDataModule):
                     ],
                 ),
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
-                ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                        a_min=-500, #-200, 
-                        a_max=3071, #1500,
-                        b_min=0.0,
-                        b_max=1.0),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                #         a_min=-200, 
-                #         a_max=1500,
-                #         b_min=0.0,
-                #         b_max=1.0),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                #         a_min=-500, #-200, 
-                #         a_max=3071, #1500,
-                #         b_min=-500,
-                #         b_max=3071),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                #         a_min=-200, 
-                #         a_max=1500,
-                #         b_min=-200,
-                #         b_max=1500),
-                # Lambdad(keys=["image3d"], func=HU2Density),
-                # ScaleIntensityd(keys=["image3d"], 
-                #         minv=0.0,
-                #         maxv=1.0),
-
+                OneOf([
+                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                            a_min=-200, 
+                            a_max=1500,
+                            b_min=0.0,
+                            b_max=1.0),
+                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
+                            a_min=-500, #-200, 
+                            a_max=3071, #1500,
+                            b_min=0.0,
+                            b_max=1.0),
+                ]),
                 # RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 # RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
 
-                # RandScaleCropd(keys=["image3d"], 
-                #                roi_scale=(0.9, 0.9, 0.8), 
-                #                max_roi_scale=(1.0, 1.0, 0.8), 
-                #                random_center=True, 
-                #                random_size=True),
+                RandScaleCropd(keys=["image3d"], 
+                               roi_scale=(0.9, 0.9, 0.8), 
+                               max_roi_scale=(1.0, 1.0, 0.8), 
+                               random_center=False, 
+                               random_size=False),
                 # RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
                 # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
                 # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
@@ -196,32 +183,18 @@ class NeRVDataModule(LightningDataModule):
                     ],
                 ), 
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
-                ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                        a_min=-500, #-200, 
-                        a_max=3071, #1500,
-                        b_min=0.0,
-                        b_max=1.0),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                #         a_min=-200, 
-                #         a_max=1500,
-                #         b_min=0.0,
-                #         b_max=1.0),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                #         a_min=-500, #-200, 
-                #         a_max=3071, #1500,
-                #         b_min=-500,
-                #         b_max=3071),
-                # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                #         a_min=-200, 
-                #         a_max=1500,
-                #         b_min=-200,
-                #         b_max=1500),
-                # Lambdad(keys=["image3d"], func=HU2Density),
-                # ScaleIntensityd(keys=["image3d"], 
-                #         minv=0.0,
-                #         maxv=1.0),
-                # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
-                # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
+                OneOf([
+                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                            a_min=-200, 
+                            a_max=1500,
+                            b_min=0.0,
+                            b_max=1.0),
+                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
+                            a_min=-500, #-200, 
+                            a_max=3071, #1500,
+                            b_min=0.0,
+                            b_max=1.0),
+                ]),
                 Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
                 Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
                 DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
@@ -445,18 +418,15 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, 
-            is_deterministic=((stage=="train") and (batch_idx%2==1)), norm_type="normalized")
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_deterministic=False, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, 
-            is_deterministic=((stage=="train") and (batch_idx%2==1)), norm_type="normalized")
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, 
-            is_deterministic=((stage=="train") and (batch_idx%2==1)), norm_type="normalized")
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
