@@ -102,7 +102,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    # Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -186,7 +186,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    # Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -282,12 +282,12 @@ class NeRVLightningModule(LightningModule):
         self.shape = hparams.shape
         self.batch_size = hparams.batch_size
 
-        self.theta = hparams.theta # use for factor to promote xray effect
-        self.alpha = hparams.alpha
-        self.kappa = hparams.kappa
-        self.gamma = hparams.gamma
-        self.delta = hparams.delta
-        self.reduction = hparams.reduction
+        # self.theta = hparams.theta # use for factor to promote xray effect
+        # self.alpha = hparams.alpha
+        # self.kappa = hparams.kappa
+        # self.gamma = hparams.gamma
+        # self.delta = hparams.delta
+        # self.reduction = hparams.reduction
         self.save_hyperparameters()
 
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
@@ -324,7 +324,7 @@ class NeRVLightningModule(LightningModule):
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
                 # dropout=0.5,
-                # mode="conv",
+                # mode="nontrainable",
             ), 
             nn.Sigmoid()  
         )
@@ -342,11 +342,11 @@ class NeRVLightningModule(LightningModule):
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
                 # dropout=0.5,
-                # mode="conv",
+                # mode="nontrainable",
             ), 
             # Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid()  
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -362,7 +362,7 @@ class NeRVLightningModule(LightningModule):
                 act=("LeakyReLU", {"inplace": True}),
                 # norm=Norm.BATCH,
                 # dropout=0.5,
-                # mode="conv",
+                # mode="nontrainable",
             ), 
             nn.Sigmoid()  
         )
@@ -379,10 +379,10 @@ class NeRVLightningModule(LightningModule):
             ),
             nn.LeakyReLU()
         )
+        # self.camera_net = torchvision.models.densenet201(pretrained=True)
+        # self.camera_net.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # self.camera_net.classifier = nn.Linear(self.camera_net.classifier.in_features, 5)
 
-        # self.opaque_net.apply(_weights_init)
-        # self.reform_net.apply(_weights_init)
-        # self.refine_net.apply(_weights_init)
         self.l1loss = nn.L1Loss(reduction="mean")
         
     def forward(self, image3d):
@@ -401,14 +401,15 @@ class NeRVLightningModule(LightningModule):
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
         if not is_deterministic:
             densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
-        # else:
-        #     densities = torch.ones_like(image3d)
+        else:
+            densities = torch.ones_like(image3d)
         
         volumes = Volumes(
             features = features, 
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
+        
         screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
         return screen
 
@@ -437,22 +438,22 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
         elif batch_idx%4==2:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%4==3:
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # elif batch_idx%4==3:
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, norm_type="normalized")
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_deterministic=(batch_idx%2==1), norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, norm_type="normalized")
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_deterministic=(batch_idx%2==1), norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, norm_type="normalized")
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_deterministic=(batch_idx%2==1), norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -516,11 +517,6 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # opt_vol = torch.optim.RAdam([
-        #         {'params': self.reform_net.parameters()},
-        #         {'params': self.refine_net.parameters()}], lr=1e0*(self.lr or self.learning_rate))
-        # opt_cam = torch.optim.RAdam(self.camera_net.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        # return opt_vol, opt_cam
         opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         return opt
 
@@ -532,7 +528,6 @@ if __name__ == "__main__":
     # Model arguments
     parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
     parser.add_argument("--shape", type=int, default=256, help="spatial size of the tensor")
-    # parser.add_argument("--reset", type=int, default=0, help="reset the training")
     parser.add_argument("--epochs", type=int, default=501, help="number of epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--wd", type=float, default=1e-6, help="adam: weight decay")
@@ -542,12 +537,6 @@ if __name__ == "__main__":
     
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
-    parser.add_argument("--theta", type=float, default=5e-2, help="density weight")
-    parser.add_argument("--gamma", type=float, default=1e+1, help="luminance weight")
-    parser.add_argument("--delta", type=float, default=1e+1, help="L1 compared to 3D")
-    parser.add_argument("--alpha", type=float, default=1e-4, help="total orgiation weight")
-    parser.add_argument("--kappa", type=float, default=0e+0, help="perceptual compared to DRR")
-
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
     parser.add_argument("--datadir", type=str, default='data', help="data directory")
     parser.add_argument("--reduction", type=str, default='sum', help="mean or sum")
