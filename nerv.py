@@ -102,7 +102,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -173,7 +173,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
