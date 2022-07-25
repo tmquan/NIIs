@@ -28,6 +28,45 @@ from monai.losses import DiceLoss
 from model import *
 from data import *
 
+def _shifted_cumprod(x, shift=1):
+    """
+    Computes `torch.cumprod(x, dim=-1)` and prepends `shift` number of
+    ones and removes `shift` trailing elements to/from the last dimension
+    of the result.
+    """
+    x_cumprod = torch.cumprod(x, dim=-1)
+    x_cumprod_shift = torch.cat(
+        [torch.ones_like(x_cumprod[..., :shift]), x_cumprod[..., :-shift]], dim=-1
+    )
+    return x_cumprod_shift
+
+class EmissionAbsorptionRaymarcherFrontToBack(EmissionAbsorptionRaymarcher):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def forward(
+        self,
+        rays_densities: torch.Tensor,
+        rays_features: torch.Tensor,
+        eps: float = 1e-10,
+        **kwargs,
+    ) -> torch.Tensor:
+        rays_densities = rays_densities[..., 0]
+        # print(rays_densities.shape)
+        # absorption = _shifted_cumprod(
+        #     (1.0 + eps) - rays_densities, shift=self.surface_thickness
+        # )
+        # weights = rays_densities * absorption
+        # features = (weights[..., None] * rays_features).sum(dim=-2)
+        # opacities = 1.0 - torch.prod(1.0 - rays_densities, dim=-1, keepdim=True)
+        absorption = _shifted_cumprod(
+            (1.0 + eps) - rays_densities.flip(dims=(-1,)), shift=self.surface_thickness
+        ).flip(dims=(-1,)) # Reverse the direction of the absorption to match X-ray detector
+        weights = rays_densities * absorption
+        features = (weights[..., None] * rays_features).sum(dim=-2)
+        opacities = 1.0 - torch.prod(1.0 - rays_densities, dim=-1, keepdim=True)
+        return torch.cat((features, opacities), dim=-1)
+
 class ScreenModel(nn.Module):
     def __init__(self, renderer):
         super().__init__()
@@ -102,7 +141,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -173,7 +212,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    Orientationd(keys=('image3d'), axcodes="PRI"),
+                    # Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -271,7 +310,8 @@ class NeRVLightningModule(LightningModule):
             max_depth = 4.5,
         )
 
-        self.raymarcher = EmissionAbsorptionRaymarcher()
+        # self.raymarcher = EmissionAbsorptionRaymarcher()
+        self.raymarcher = EmissionAbsorptionRaymarcherFrontToBack() # X-Ray Raymarcher
 
         self.visualizer = VolumeRenderer(
             raysampler = self.raysampler, 
