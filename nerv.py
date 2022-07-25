@@ -253,7 +253,7 @@ class NeRVDataModule(LightningDataModule):
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=2, 
+            num_workers=0, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -471,11 +471,11 @@ class NeRVLightningModule(LightningModule):
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
                   + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(recvol_xr, estvol_xr) \
-                  + self.l1loss(recvol_xr, estmid_xr) \
-
+                  + self.l1loss(estvol_xr, recvol_xr) \
+                  + self.l1loss(estmid_xr, estvol_xr) \
+                # + self.l1loss(estmid_xr, recmid_xr) \
+                  
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
                     
