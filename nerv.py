@@ -177,9 +177,9 @@ class NeRVDataModule(LightningDataModule):
                 # RandAffined(keys=["image3d"], rotate_range=None, shear_range=None, translate_range=20, scale_range=None),
                 # CropForegroundd(keys=["image3d"], source_key="image3d", select_fn=lambda x: x>0, margin=0),
                 # CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=lambda x: x>0, margin=0),
-                Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
-                Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
-                DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
+                Resized(keys=["image3d"], spatial_size=self.shape, size_mode="longest", mode=["trilinear"], align_corners=True),
+                Resized(keys=["image2d"], spatial_size=self.shape, size_mode="longest", mode=["area"]),
+                DivisiblePadd(keys=["image3d", "image2d"], k=self.shape, mode="constant", constant_values=0),
                 
                 ToTensord(keys=["image3d", "image2d"],),
             ]
@@ -234,9 +234,9 @@ class NeRVDataModule(LightningDataModule):
                             b_min=0.0,
                             b_max=1.0),
                 ]),
-                Resized(keys=["image3d"], spatial_size=256, size_mode="longest", mode=["trilinear"], align_corners=True),
-                Resized(keys=["image2d"], spatial_size=256, size_mode="longest", mode=["area"]),
-                DivisiblePadd(keys=["image3d", "image2d"], k=256, mode="constant", constant_values=0),
+                Resized(keys=["image3d"], spatial_size=self.shape, size_mode="longest", mode=["trilinear"], align_corners=True),
+                Resized(keys=["image2d"], spatial_size=self.shape, size_mode="longest", mode=["area"]),
+                DivisiblePadd(keys=["image3d", "image2d"], k=self.shape, mode="constant", constant_values=0),
             
                 ToTensord(keys=["image3d", "image2d"],),
             ]
@@ -305,7 +305,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 256,
+            n_pts_per_ray = self.shape,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -335,8 +335,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
                 # dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -353,8 +353,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             # Flatten(),
@@ -373,8 +373,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -386,8 +386,8 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
+                norm=Norm.BATCH,
                 pretrained=True, 
             ),
             nn.LeakyReLU()
@@ -473,7 +473,7 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(orgvol_ct, estmid_ct) \
                   + self.l1loss(estvol_xr, recmid_xr) \
                   + self.l1loss(estvol_xr, recvol_xr) \
-                  + self.l1loss(estmid_xr, estvol_xr) \
+                # + self.l1loss(estmid_xr, estvol_xr) \
                 # + self.l1loss(estmid_xr, recmid_xr) \
                   
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
