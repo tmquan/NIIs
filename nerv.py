@@ -326,6 +326,14 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.opaque_net = nn.Sequential(
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=64, 
+            #     feature_size=12,
+            # ),
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -344,6 +352,14 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.reform_net = nn.Sequential(
+            # SwinUNETR(
+            #     spatial_dims=2,
+            #     in_channels=1+5,
+            #     out_channels=self.shape, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=32, 
+            #     feature_size=24
+            # ),
             UNet(
                 spatial_dims=2,
                 in_channels=1+5,
@@ -364,6 +380,14 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.refine_net = nn.Sequential(
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=64, 
+            #     feature_size=12,
+            # ),
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -392,6 +416,19 @@ class NeRVLightningModule(LightningModule):
                 pretrained=True, 
             ),
             nn.LeakyReLU()
+            # ViT(
+            #     img_size=self.shape, 
+            #     patch_size=(16, 16),
+            #     spatial_dims=2,
+            #     in_channels=1,
+            #     num_classes=5,
+            #     pos_embed='conv', 
+            #     classification=True, 
+            #     hidden_size=512,
+            #     mlp_dim=1024,
+            #     num_layers=8,
+            #     num_heads=8,
+            # ),
         )
         # self.camera_net = torchvision.models.densenet201(pretrained=True)
         # self.camera_net.features.conv0 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -436,7 +473,7 @@ class NeRVLightningModule(LightningModule):
         return reform, refine
     
     def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) # [0, 1] 
+        camera = self.camera_net(image2d) #[0] # [0, 1] 
         return camera
 
     def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
@@ -591,7 +628,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         accumulate_grad_batches=5, 
-        # strategy="ddp_sharded",
+        strategy="ddp_sharded",
         precision=16,
         stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
