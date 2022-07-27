@@ -103,8 +103,8 @@ def init_random_cameras(
     #     T[:, 2] = 4
     # R = so3_exp_map(torch.randn(batch_size, 3) * 3.0)
 
-
-    R, T = look_at_view_transform(dist, elev, azim, degrees=True, device=device)
+    R, T = look_at_view_transform(dist.float(), elev.float(), azim.float(), degrees=True, device=device)
+    
     R = R.to(cam_ft.dtype)
     T = T.to(cam_ft.dtype)
     cam_params = {"R": R, "T": T}

@@ -12,10 +12,11 @@ from pytorch_lightning.utilities.seed import seed_everything
 # from sympy import re
 
 # from torchmetrics.image import LearnedPerceptualImagePatchSimilarity
-
-import resource
-rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
-resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
+import torch
+torch.cuda.empty_cache()
+# import resource
+# rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+# resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
 # from kornia.color import GrayscaleToRgb
 # from kornia.augmentation import Normalize
@@ -246,14 +247,14 @@ class NeRVDataModule(LightningDataModule):
             keys=["image3d", "image2d"],
             data=[self.val_image3d_files, self.val_image2d_files], 
             transform=self.val_transforms,
-            length=200,
+            length=400,
             batch_size=self.batch_size,
         )
         
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=0, 
+            num_workers=4, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -335,7 +336,7 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
+                dropout=0.5,
                 norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
@@ -381,7 +382,7 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.camera_net = nn.Sequential(
-            DenseNet121(
+            DenseNet201(
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
@@ -406,24 +407,24 @@ class NeRVLightningModule(LightningModule):
         is_deterministic: bool=False,
         norm_type: str="normalized"
     ) -> torch.Tensor:
-        cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                                batch_size=self.batch_size, 
-                                cam_mu=cam_mu,
-                                cam_bw=cam_bw,
-                                cam_ft=camera_feat*2. - 1.).to(image3d.device)
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
         if not is_deterministic:
             densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
         else:
             densities = torch.ones_like(image3d)
-        
-        volumes = Volumes(
+
+        self.cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+                            batch_size=self.batch_size, 
+                            cam_mu=cam_mu,
+                            cam_bw=cam_bw,
+                            cam_ft=camera_feat*2. - 1.).to(image3d.device)
+        self.volumes = Volumes(
             features = features, 
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
-        
-        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
+            
+        screen = self.viewer(volumes=self.volumes, cameras=self.cameras, norm_type=norm_type)
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
@@ -591,7 +592,7 @@ if __name__ == "__main__":
         ],
         accumulate_grad_batches=5, 
         # strategy="ddp_sharded",
-        # precision=16,
+        precision=16,
         stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
         # gradient_clip_val=5, 
