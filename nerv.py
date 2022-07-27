@@ -142,7 +142,7 @@ class NeRVDataModule(LightningDataModule):
                 Rotate90d(keys=["image2d"], k=3),
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    # Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -213,7 +213,7 @@ class NeRVDataModule(LightningDataModule):
                 RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1), #Right cardio
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
-                    # Orientationd(keys=('image3d'), axcodes="PRI"),
+                    Orientationd(keys=('image3d'), axcodes="PRI"),
                     # Orientationd(keys=('image3d'), axcodes="ALI"),
                     # Orientationd(keys=('image3d'), axcodes="PLI"),
                     # Orientationd(keys=["image3d"], axcodes="LAI"),
@@ -340,7 +340,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=4,
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
@@ -366,7 +366,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=self.shape,
                 channels=(32, 64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
@@ -394,7 +394,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(16, 32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=4,
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
@@ -628,7 +628,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         accumulate_grad_batches=5, 
-        strategy="ddp_sharded",
+        # strategy="ddp_sharded",
         precision=16,
         stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
