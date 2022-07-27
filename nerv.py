@@ -450,18 +450,18 @@ class NeRVLightningModule(LightningModule):
         else:
             densities = torch.ones_like(image3d)
 
-        self.cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+        cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
                             cam_ft=camera_feat*2. - 1.).to(image3d.device)
-        self.volumes = Volumes(
+        volumes = Volumes(
             features = features, 
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
             
-        screen = self.viewer(volumes=self.volumes, cameras=self.cameras, norm_type=norm_type)
+        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
