@@ -143,12 +143,12 @@ class NeRVDataModule(LightningDataModule):
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
                     Orientationd(keys=('image3d'), axcodes="PRI"),
-                    # Orientationd(keys=('image3d'), axcodes="ALI"),
-                    # Orientationd(keys=('image3d'), axcodes="PLI"),
-                    # Orientationd(keys=["image3d"], axcodes="LAI"),
-                    # Orientationd(keys=["image3d"], axcodes="RAI"),
-                    # Orientationd(keys=["image3d"], axcodes="LPI"),
-                    # Orientationd(keys=["image3d"], axcodes="RPI"),
+                    Orientationd(keys=('image3d'), axcodes="ALI"),
+                    Orientationd(keys=('image3d'), axcodes="PLI"),
+                    Orientationd(keys=["image3d"], axcodes="LAI"),
+                    Orientationd(keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=["image3d"], axcodes="LPI"),
+                    Orientationd(keys=["image3d"], axcodes="RPI"),
                     ],
                 ),
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
@@ -166,7 +166,7 @@ class NeRVDataModule(LightningDataModule):
                 ]),
                 # RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 # RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
-                RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1),
+                RandFlipd(keys=["image2d"], prob=0.5, spatial_axis=1),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
 
@@ -214,12 +214,12 @@ class NeRVDataModule(LightningDataModule):
                 OneOf([
                     Orientationd(keys=('image3d'), axcodes="ARI"),
                     Orientationd(keys=('image3d'), axcodes="PRI"),
-                    # Orientationd(keys=('image3d'), axcodes="ALI"),
-                    # Orientationd(keys=('image3d'), axcodes="PLI"),
-                    # Orientationd(keys=["image3d"], axcodes="LAI"),
-                    # Orientationd(keys=["image3d"], axcodes="RAI"),
-                    # Orientationd(keys=["image3d"], axcodes="LPI"),
-                    # Orientationd(keys=["image3d"], axcodes="RPI"),
+                    Orientationd(keys=('image3d'), axcodes="ALI"),
+                    Orientationd(keys=('image3d'), axcodes="PLI"),
+                    Orientationd(keys=["image3d"], axcodes="LAI"),
+                    Orientationd(keys=["image3d"], axcodes="RAI"),
+                    Orientationd(keys=["image3d"], axcodes="LPI"),
+                    Orientationd(keys=["image3d"], axcodes="RPI"),
                     ],
                 ), 
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
@@ -645,15 +645,15 @@ if __name__ == "__main__":
 
     # Create data module
     train_image3d_folders = [
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
@@ -675,26 +675,26 @@ if __name__ == "__main__":
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), #
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
     ]
     train_label2d_folders = [
     ]
 
     val_image3d_folders = [
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
@@ -714,10 +714,10 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
+        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
     ]
 
     test_image3d_folders = val_image3d_folders
