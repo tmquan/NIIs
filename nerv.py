@@ -362,7 +362,7 @@ class NeRVLightningModule(LightningModule):
             # ),
             UNet(
                 spatial_dims=2,
-                in_channels=1+5,
+                in_channels=self.shape,
                 out_channels=self.shape,
                 channels=(32, 64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2, 2),
@@ -465,9 +465,13 @@ class NeRVLightningModule(LightningModule):
         return screen
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
+        code2d = torch.zeros(image2d.shape[0], 250, self.shape, self.shape, device=image2d.device)
+        penc2d = PositionalEncodingPermute2D(250)(code2d)
         concat = torch.cat([image2d, 
+                            penc2d,
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
+        
         reform = self.reform_net(concat)# * 2.0 - 1.0) * 0.5 + 0.5
         refine = self.refine_net(reform)# * 2.0 - 1.0) * 0.5 + 0.5
         return reform, refine
