@@ -480,10 +480,10 @@ class NeRVLightningModule(LightningModule):
         camera = self.camera_net(image2d) #[0] # [0, 1] 
         return camera
 
-    def training_step(self, batch, batch_idx, stage: Optional[str]='train'):
-        return self._sharing_step(batch, batch_idx, stage=stage)   
+    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
+        return self._sharing_step(batch, batch_idx, optimizer_idx, stage=stage)   
 
-    def _sharing_step(self, batch, batch_idx, stage: Optional[str]='evaluation'):   
+    def _sharing_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
@@ -524,7 +524,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) \
         
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
@@ -549,14 +549,21 @@ class NeRVLightningModule(LightningModule):
                                                     estvol_xr], dim=-2), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
-        return info
+        if optimizer_idx==0:
+            return {f'loss': 1e0*cams_loss} 
+        elif optimizer_idx==1:
+            return {f'loss': 1e0*im2d_loss} 
+        elif optimizer_idx==2:
+            return {f'loss': 1e0*im3d_loss} 
+        else:
+            return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         
     def validation_step(self, batch, batch_idx):
-        return self._sharing_step(batch, batch_idx, stage='validation')
+        return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='validation')
 
     def test_step(self, batch, batch_idx):
-        return self._sharing_step(batch, batch_idx, stage='test')
+        return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='test')
 
     def evaluation_epoch_end(self, outputs, stage: Optional[str]='evaluation'):
         loss = torch.stack([x[f'loss'] for x in outputs]).mean()
@@ -572,8 +579,18 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return opt
+        opt_cam = torch.optim.RAdam([
+                                        {'params': self.camera_net.parameters()},
+                                    ], lr=1e0*(self.lr or self.learning_rate))
+        opt_scr = torch.optim.RAdam([
+                                        {'params': self.opaque_net.parameters()},
+                                    ], lr=1e0*(self.lr or self.learning_rate))
+        opt_vol = torch.optim.RAdam([
+                                        {'params': self.reform_net.parameters()},
+                                        {'params': self.refine_net.parameters()},
+                                    ], lr=1e0*(self.lr or self.learning_rate))
+        opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return opt_cam, opt_scr, opt_vol, opt_all
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -631,10 +648,10 @@ if __name__ == "__main__":
             # ModelSummary(max_depth=-1), 
             # tensorboard_callback
         ],
-        accumulate_grad_batches=5, 
+        accumulate_grad_batches=4, 
         # strategy="ddp_sharded",
         precision=16,
-        stochastic_weight_avg=True,
+        # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
         # gradient_clip_val=5, 
         # gradient_clip_algorithm='norm', #'norm', #'value'
