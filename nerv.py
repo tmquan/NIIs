@@ -415,7 +415,8 @@ class NeRVLightningModule(LightningModule):
                 norm=Norm.BATCH,
                 pretrained=True, 
             ),
-            nn.LeakyReLU()
+            nn.Sigmoid()
+            # nn.LeakyReLU()
             # ViT(
             #     img_size=self.shape, 
             #     patch_size=(16, 16),
@@ -480,7 +481,7 @@ class NeRVLightningModule(LightningModule):
         camera = self.camera_net(image2d) #[0] # [0, 1] 
         return camera
 
-    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
         return self._sharing_step(batch, batch_idx, optimizer_idx, stage=stage)   
 
     def _sharing_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -579,18 +580,19 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_cam = torch.optim.RAdam([
-                                        {'params': self.camera_net.parameters()},
-                                    ], lr=1e0*(self.lr or self.learning_rate))
-        opt_scr = torch.optim.RAdam([
-                                        {'params': self.opaque_net.parameters()},
-                                    ], lr=1e0*(self.lr or self.learning_rate))
-        opt_vol = torch.optim.RAdam([
-                                        {'params': self.reform_net.parameters()},
-                                        {'params': self.refine_net.parameters()},
-                                    ], lr=1e0*(self.lr or self.learning_rate))
-        # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return opt_cam, opt_scr, opt_vol #, opt_all
+        # opt_cam = torch.optim.RAdam([
+        #                                 {'params': self.camera_net.parameters()},
+        #                             ], lr=1e0*(self.lr or self.learning_rate))
+        # opt_scr = torch.optim.RAdam([
+        #                                 {'params': self.opaque_net.parameters()},
+        #                             ], lr=1e0*(self.lr or self.learning_rate))
+        # opt_vol = torch.optim.RAdam([
+        #                                 {'params': self.reform_net.parameters()},
+        #                                 {'params': self.refine_net.parameters()},
+        #                             ], lr=1e0*(self.lr or self.learning_rate))
+        # # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        # return opt_cam, opt_scr, opt_vol #, opt_all
+        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
