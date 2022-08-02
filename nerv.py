@@ -345,7 +345,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -371,7 +371,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             # Flatten(),
@@ -399,7 +399,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -411,7 +411,7 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout_prob=0.5,
+                # dropout_prob=0.5,
                 # norm=Norm.BATCH,
                 pretrained=True, 
             ),
@@ -493,9 +493,9 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
         elif batch_idx%4==2:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        # elif batch_idx%4==3:
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        elif batch_idx%4==3:
+            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
