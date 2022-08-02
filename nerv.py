@@ -551,12 +551,12 @@ class NeRVLightningModule(LightningModule):
 
         if optimizer_idx==0:
             return {f'loss': 1e0*cams_loss} 
-        if optimizer_idx==1:
+        elif optimizer_idx==1:
             return {f'loss': 1e0*im2d_loss} 
-        if optimizer_idx==2:
+        elif optimizer_idx==2:
             return {f'loss': 1e0*im3d_loss} 
-        # else:
-        #     return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        else:
+            return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         
     def validation_step(self, batch, batch_idx):
