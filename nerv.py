@@ -254,7 +254,7 @@ class NeRVDataModule(LightningDataModule):
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=4, 
+            num_workers=0, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
