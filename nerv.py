@@ -254,7 +254,7 @@ class NeRVDataModule(LightningDataModule):
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=0, 
+            num_workers=4, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -344,8 +344,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
-                norm=Norm.BATCH,
+                # dropout=0.5,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -370,13 +370,13 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
-                norm=Norm.BATCH,
+                # dropout=0.5,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             # Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid()  
+            nn.Sigmoid()  
         )
 
         self.refine_net = nn.Sequential(
@@ -398,8 +398,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=5,
                 up_kernel_size=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout=0.5,
-                norm=Norm.BATCH,
+                # dropout=0.5,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -411,8 +411,8 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout_prob=0.5,
-                norm=Norm.BATCH,
+                # dropout_prob=0.5,
+                # norm=Norm.BATCH,
                 pretrained=True, 
             ),
             nn.Sigmoid()
@@ -481,7 +481,7 @@ class NeRVLightningModule(LightningModule):
         camera = self.camera_net(image2d) #[0] # [0, 1] 
         return camera
 
-    def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
         return self._sharing_step(batch, batch_idx, optimizer_idx, stage=stage)   
 
     def _sharing_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -580,19 +580,13 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # opt_cam = torch.optim.RAdam([
-        #                                 {'params': self.camera_net.parameters()},
-        #                             ], lr=1e0*(self.lr or self.learning_rate))
-        # opt_scr = torch.optim.RAdam([
-        #                                 {'params': self.opaque_net.parameters()},
-        #                             ], lr=1e0*(self.lr or self.learning_rate))
-        # opt_vol = torch.optim.RAdam([
-        #                                 {'params': self.reform_net.parameters()},
-        #                                 {'params': self.refine_net.parameters()},
-        #                             ], lr=1e0*(self.lr or self.learning_rate))
-        # # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        # return opt_cam, opt_scr, opt_vol #, opt_all
-        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        opt_cam = torch.optim.RAdam([{'params': self.camera_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        opt_scr = torch.optim.RAdam([{'params': self.opaque_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        opt_vol = torch.optim.RAdam([{'params': self.reform_net.parameters()},
+                                     {'params': self.refine_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return opt_cam, opt_scr, opt_vol #, opt_all
+        # return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -650,7 +644,7 @@ if __name__ == "__main__":
             # ModelSummary(max_depth=-1), 
             # tensorboard_callback
         ],
-        # accumulate_grad_batches=4, 
+        accumulate_grad_batches=4, 
         # strategy="ddp_sharded",
         precision=16,
         # stochastic_weight_avg=True,
@@ -680,7 +674,7 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-2'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-3'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-4'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/val/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
