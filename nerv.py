@@ -551,12 +551,12 @@ class NeRVLightningModule(LightningModule):
 
         if optimizer_idx==0:
             return {f'loss': 1e0*cams_loss} 
-        elif optimizer_idx==1:
+        if optimizer_idx==1:
             return {f'loss': 1e0*im2d_loss} 
-        elif optimizer_idx==2:
+        if optimizer_idx==2:
             return {f'loss': 1e0*im3d_loss} 
-        else:
-            return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        # else:
+        #     return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         
     def validation_step(self, batch, batch_idx):
@@ -589,8 +589,8 @@ class NeRVLightningModule(LightningModule):
                                         {'params': self.reform_net.parameters()},
                                         {'params': self.refine_net.parameters()},
                                     ], lr=1e0*(self.lr or self.learning_rate))
-        opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return opt_cam, opt_scr, opt_vol, opt_all
+        # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return opt_cam, opt_scr, opt_vol #, opt_all
 
 if __name__ == "__main__":
     parser = ArgumentParser()
