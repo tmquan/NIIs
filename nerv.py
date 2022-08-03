@@ -411,7 +411,7 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout_prob=0.5,
+                # dropout_prob=0.5,
                 norm=Norm.BATCH,
                 pretrained=True, 
             ),
