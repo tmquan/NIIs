@@ -254,7 +254,7 @@ class NeRVDataModule(LightningDataModule):
         self.val_loader = DataLoader(
             self.val_datasets, 
             batch_size=self.batch_size, 
-            num_workers=2, 
+            num_workers=4, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -512,18 +512,19 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
         
-        # XR path
-        orgcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_deterministic=False, norm_type="normalized")
-        reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        with torch.cuda.amp.autocast():
+            # XR path
+            orgcam_xr = self.forward_camera(orgimg_xr)
+            estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
+            estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_deterministic=False, norm_type="normalized")
+            reccam_xr = self.forward_camera(estimg_xr)
+            recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
-        # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
-        estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
+            # CT path
+            estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
+            estcam_ct = self.forward_camera(estimg_ct)
+            estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
+            recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -659,7 +660,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         accumulate_grad_batches=4, 
-        # strategy="ddp_sharded",
+        strategy="deepspeed", #"ddp_sharded",
         precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
