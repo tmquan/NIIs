@@ -197,7 +197,7 @@ class NeRVDataModule(LightningDataModule):
         self.train_loader = DataLoader(
             self.train_datasets, 
             batch_size=self.batch_size, 
-            num_workers=4, 
+            num_workers=8, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -425,8 +425,8 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                dropout_prob=0.5,
-                norm=Norm.BATCH,
+                # dropout_prob=0.5,
+                # norm=Norm.BATCH,
                 pretrained=True, 
             ),
             nn.Sigmoid()
@@ -661,7 +661,7 @@ if __name__ == "__main__":
         accumulate_grad_batches=4, 
         # strategy="ddp_sharded",
         precision=16,
-        stochastic_weight_avg=True,
+        # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
         # gradient_clip_val=5, 
         # gradient_clip_algorithm='norm', #'norm', #'value'
