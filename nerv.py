@@ -326,14 +326,6 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.opaque_net = nn.Sequential(
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=64, 
-            #     feature_size=12,
-            # ),
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -344,64 +336,33 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
-            nn.Sigmoid()  
+            # nn.Sigmoid()  
         )
 
         self.reform_net = nn.Sequential(
-            # SwinUNETR(
-            #     spatial_dims=2,
-            #     in_channels=1+5,
-            #     out_channels=self.shape, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=32, 
-            #     feature_size=24
-            # ),
             UNet(
                 spatial_dims=2,
                 in_channels=self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 2048),
+                channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
-            # Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # UNet(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, 
-            #     channels=(32, 64, 128, 256, 512, 1024),
-            #     strides=(2, 2, 2, 2, 2),
-            #     num_res_units=2,
-            #     kernel_size=3,
-            #     up_kernel_size=3,
-            #     # act=("LeakyReLU", {"inplace": True}),
-            #     # dropout=0.5,
-            #     # norm=Norm.BATCH,
-            #     # mode="nontrainable",
-            # ), 
-            nn.Sigmoid()  
+            # nn.Sigmoid(), 
         )
 
         self.refine_net = nn.Sequential(
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=64, 
-            #     feature_size=12,
-            # ),
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -412,11 +373,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
-            nn.Sigmoid()  
+            # nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
@@ -425,30 +386,12 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout_prob=0.5,
-                # norm=Norm.BATCH,
+                dropout_prob=0.5,
+                norm=Norm.BATCH,
                 pretrained=True, 
             ),
-            nn.Sigmoid()
-            # nn.LeakyReLU()
-            # ViT(
-            #     img_size=self.shape, 
-            #     patch_size=(16, 16),
-            #     spatial_dims=2,
-            #     in_channels=1,
-            #     num_classes=5,
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     hidden_size=512,
-            #     mlp_dim=1024,
-            #     num_layers=8,
-            #     num_heads=8,
-            # ),
+            # nn.Sigmoid(),
         )
-        # self.camera_net = torchvision.models.densenet201(pretrained=True)
-        # self.camera_net.features.conv0 = nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=3, bias=False)
-        # self.camera_net.classifier = nn.Linear(self.camera_net.classifier.in_features, 5)
-
         self.l1loss = nn.L1Loss(reduction="mean")
         
     def forward(self, image3d):
@@ -558,7 +501,7 @@ class NeRVLightningModule(LightningModule):
                         ], dim=-2)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
-                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch)#*self.batch_size + batch_idx)
+                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
 
                 plot_2d_or_3d_image(data=torch.cat([orgvol_ct, 
                                                     estvol_ct, 
@@ -700,11 +643,11 @@ if __name__ == "__main__":
     ]
 
     train_image2d_folders = [
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
@@ -740,7 +683,7 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
