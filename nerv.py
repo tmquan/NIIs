@@ -335,12 +335,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                # act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
-            # nn.Sigmoid()  
+            nn.Sigmoid()  
         )
 
         self.reform_net = nn.Sequential(
@@ -353,13 +353,13 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                # act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid(), 
+            nn.Sigmoid(), 
         )
 
         self.refine_net = nn.Sequential(
@@ -372,12 +372,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
+                # act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
-            # nn.Sigmoid()  
+            nn.Sigmoid()  
         )
 
         self.camera_net = nn.Sequential(
@@ -385,12 +385,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
+                # act=("LeakyReLU", {"inplace": True}),
                 # dropout_prob=0.5,
                 # norm=Norm.BATCH,
                 pretrained=True, 
             ),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
