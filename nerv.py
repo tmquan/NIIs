@@ -348,7 +348,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 1600),
+                channels=(64, 128, 256, 512, 1024, 1200),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
