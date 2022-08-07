@@ -306,7 +306,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = self.shape,
+            n_pts_per_ray = 200, #self.shape,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -335,7 +335,7 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
@@ -348,12 +348,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 1200),
+                channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
@@ -372,7 +372,7 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
                 # norm=Norm.BATCH,
                 # mode="nontrainable",
@@ -385,7 +385,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("ReLU", {"inplace": True}),
+                act=("LeakyReLU", {"inplace": True}),
                 # dropout_prob=0.5,
                 # norm=Norm.BATCH,
                 pretrained=True, 
@@ -399,15 +399,15 @@ class NeRVLightningModule(LightningModule):
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
         factor: float=1.0, 
-        is_deterministic: bool=False,
+        is_stochastic: bool=False,
         norm_type: str="normalized"
     ) -> torch.Tensor:
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
-        if not is_deterministic:
-            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
+        if is_stochastic:
+            densities = self.opaque_net(image3d) + torch.randn_like(image3d)
         else:
-            densities = torch.ones_like(image3d)
-
+            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
+        
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
@@ -447,27 +447,27 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
     
-        if batch_idx%4==1:
+        if batch_idx%5==1:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%4==2:
+        elif batch_idx%5==2:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%4==3:
+        elif batch_idx%5==3:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        
+
         # with torch.cuda.amp.autocast():
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_deterministic=False, norm_type="normalized")
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_deterministic=False, norm_type="normalized")
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
