@@ -515,7 +515,7 @@ class NeRVLightningModule(LightningModule):
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
 
                 plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
-                                                    torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-1), 
+                                                    torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
         if optimizer_idx==0:
