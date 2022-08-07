@@ -405,6 +405,8 @@ class NeRVLightningModule(LightningModule):
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
         
         if opacities=='stochastic':
+            densities = self.opaque_net(image3d) #+ torch.randn_like(image3d)
+        elif opacities=='deterministic':
             densities = self.opaque_net(image3d)
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
@@ -457,8 +459,10 @@ class NeRVLightningModule(LightningModule):
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
         # with torch.cuda.amp.autocast():
-        if stage=='train' or stage=='validation' or stage=='test':
+        if stage=='train':
             opacities = 'stochastic'
+        elif stage=='validation' or stage=='test':
+            opacities = 'deterministic'
         elif stage=='constant':
             opacities = 'constant'
         
@@ -491,9 +495,22 @@ class NeRVLightningModule(LightningModule):
         
         tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
                   + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) \
-                #  + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
+                # + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
 
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+
+        # if stage=='train':
+        #     opacities = 'stochastic'
+        #     tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
+        #               + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) \
+        #            #  + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
+        # elif stage=='validation' or stage=='test':
+        # else:
+        #     opacities = 'deterministic'
+        #     tran_loss = self.l1loss(estalp_ct, torch.ones_like(estalp_ct)) \
+        #               + self.l1loss(estalp_xr, torch.ones_like(estalp_xr)) \
+        #            #  + self.l1loss(recalp_ct, torch.ones_like(recalp_ct)) \
+
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
@@ -517,15 +534,15 @@ class NeRVLightningModule(LightningModule):
                 plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
                                                     torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-
-        if optimizer_idx==0:
-            return {f'loss': 1e0*cams_loss} 
-        elif optimizer_idx==1:
-            return {f'loss': 1e0*im2d_loss} 
-        elif optimizer_idx==2:
-            return {f'loss': 1e0*im3d_loss} 
-        else:
-            return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        return info
+        # if optimizer_idx==0:
+        #     return {f'loss': 1e0*cams_loss} 
+        # elif optimizer_idx==1:
+        #     return {f'loss': 1e0*im2d_loss} 
+        # elif optimizer_idx==2:
+        #     return {f'loss': 1e0*im3d_loss} 
+        # else:
+        #     return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         
     def validation_step(self, batch, batch_idx):
