@@ -405,13 +405,9 @@ class NeRVLightningModule(LightningModule):
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
         
         if opacities=='stochastic':
-            densities = self.opaque_net(image3d) + torch.randn_like(image3d)
+            densities = self.opaque_net(image3d)
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
-        elif opacities=='deterministic':
-            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
-        else:
-            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
         
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
@@ -425,7 +421,7 @@ class NeRVLightningModule(LightningModule):
         )
             
         screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
-        return screen
+        return screen, densities
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
         code2d = torch.zeros(image2d.shape[0], 250, self.shape, self.shape, device=image2d.device)
@@ -461,29 +457,23 @@ class NeRVLightningModule(LightningModule):
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
         # with torch.cuda.amp.autocast():
-        if stage=='train':
+        if stage=='train' or stage=='validation' or stage=='test':
             opacities = 'stochastic'
-        elif stage=='validation':
-            opacities = 'deterministic'
-        elif stage=='validation':
-            opacities = 'deterministic'
         elif stage=='constant':
             opacities = 'constant'
-        else:
-            opacities = 'deterministic'
         
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
+        estimg_xr, estalp_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        estimg_ct, estalp_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        recimg_ct, recalp_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -499,11 +489,16 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) \
         
+        tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
+                  + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) \
+                #  + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
+
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
+        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
 
         if batch_idx == 0:
             with torch.no_grad():
@@ -519,9 +514,8 @@ class NeRVLightningModule(LightningModule):
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
 
-                plot_2d_or_3d_image(data=torch.cat([orgvol_ct, 
-                                                    estvol_ct, 
-                                                    estvol_xr], dim=-2), 
+                plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
+                                                    torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-1), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
 
         if optimizer_idx==0:
