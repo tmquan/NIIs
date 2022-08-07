@@ -403,13 +403,16 @@ class NeRVLightningModule(LightningModule):
         norm_type: str="normalized"
     ) -> torch.Tensor:
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
+        
         if opacities=='stochastic':
             densities = self.opaque_net(image3d) + torch.randn_like(image3d)
-        elif opacities=='deterministic':
-            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
-
+        elif opacities=='deterministic':
+            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
+        else:
+            densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
+        
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
@@ -462,9 +465,13 @@ class NeRVLightningModule(LightningModule):
             opacities = 'stochastic'
         elif stage=='validation':
             opacities = 'deterministic'
-        else:
+        elif stage=='validation':
+            opacities = 'deterministic'
+        elif stage=='constant':
             opacities = 'constant'
-            
+        else:
+            opacities = 'deterministic'
+        
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
