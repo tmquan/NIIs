@@ -399,15 +399,17 @@ class NeRVLightningModule(LightningModule):
 
     def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
         factor: float=1.0, 
-        is_stochastic: bool=False,
+        opacities: str= 'stochastic',
         norm_type: str="normalized"
     ) -> torch.Tensor:
         features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
-        if is_stochastic:
+        if opacities=='stochastic':
             densities = self.opaque_net(image3d) + torch.randn_like(image3d)
-        else:
+        elif opacities=='deterministic':
             densities = self.opaque_net(image3d)# * 2.0 - 1.0) * 0.5 + 0.5
-        
+        elif opacities=='constant':
+            densities = torch.ones_like(image3d)
+
         cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
@@ -456,18 +458,25 @@ class NeRVLightningModule(LightningModule):
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
         # with torch.cuda.amp.autocast():
+        if stage=='train':
+            opacities = 'stochastic'
+        elif stage=='validation':
+            opacities = 'deterministic'
+        else:
+            opacities = 'constant'
+            
         # XR path
         orgcam_xr = self.forward_camera(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
+        estimg_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
         reccam_xr = self.forward_camera(estimg_xr)
         recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
+        estimg_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
         estcam_ct = self.forward_camera(estimg_ct)
         estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, is_stochastic=(stage=='train'), norm_type="normalized")
+        recimg_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
