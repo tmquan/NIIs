@@ -167,29 +167,6 @@ class VolumeModel(nn.Module):
         self._renderer = renderer
         
     def forward(self, cameras, volumes, norm_type="standardized"):
-        # batch_size = cameras.R.shape[0]
-
-        # # Convert the log-space values to the densities/colors
-        # densities = torch.sigmoid(self.log_densities)
-        # colors = torch.sigmoid(self.log_colors)
-        
-        # # Instantiate the Volumes object, making sure
-        # # the densities and colors are correctly
-        # # expanded batch_size-times.
-        # volumes = Volumes(
-        #     densities = densities[None].expand(
-        #         batch_size, *self.log_densities.shape),
-        #     features = colors[None].expand(
-        #         batch_size, *self.log_colors.shape),
-        #     voxel_size=self._voxel_size,
-        # )
-        
-        # Given cameras and volumes, run the renderer
-        # and return only the first output value 
-        # (the 2nd output is a representation of the sampled
-        # rays which can be omitted for our purpose).
-        # return self._renderer(cameras=cameras, volumes=volumes)[0]
-        # screen_RGBA = screen_RGBA.reshape(B, self.shape, self.shape, 4).permute(0,3,2,1) # 3 for NeRF
         screen_RGBA, _ = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         # print(screen_RGBA)
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
@@ -208,7 +185,6 @@ def get_emb(sin_inp):
     """
     emb = torch.stack((sin_inp.sin(), sin_inp.cos()), dim=-1)
     return torch.flatten(emb, -2, -1)
-
 
 class PositionalEncoding1D(nn.Module):
     def __init__(self, channels):
@@ -245,7 +221,6 @@ class PositionalEncoding1D(nn.Module):
         self.cached_penc = emb[None, :, :orig_ch].repeat(batch_size, 1, 1)
         return self.cached_penc
 
-
 class PositionalEncodingPermute1D(nn.Module):
     def __init__(self, channels):
         """
@@ -262,7 +237,6 @@ class PositionalEncodingPermute1D(nn.Module):
     @property
     def org_channels(self):
         return self.penc.org_channels
-
 
 class PositionalEncoding2D(nn.Module):
     def __init__(self, channels):
@@ -305,7 +279,6 @@ class PositionalEncoding2D(nn.Module):
         self.cached_penc = emb[None, :, :, :orig_ch].repeat(tensor.shape[0], 1, 1, 1)
         return self.cached_penc
 
-
 class PositionalEncodingPermute2D(nn.Module):
     def __init__(self, channels):
         """
@@ -322,7 +295,6 @@ class PositionalEncodingPermute2D(nn.Module):
     @property
     def org_channels(self):
         return self.penc.org_channels
-
 
 class PositionalEncoding3D(nn.Module):
     def __init__(self, channels):
@@ -371,7 +343,6 @@ class PositionalEncoding3D(nn.Module):
         self.cached_penc = emb[None, :, :, :, :orig_ch].repeat(batch_size, 1, 1, 1, 1)
         return self.cached_penc
 
-
 class PositionalEncodingPermute3D(nn.Module):
     def __init__(self, channels):
         """
@@ -388,7 +359,6 @@ class PositionalEncodingPermute3D(nn.Module):
     @property
     def org_channels(self):
         return self.penc.org_channels
-
 
 class Summer(nn.Module):
     def __init__(self, penc):
@@ -696,8 +666,6 @@ class CustomUNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.model(x)
         return x
-
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()

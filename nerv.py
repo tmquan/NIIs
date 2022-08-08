@@ -306,7 +306,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 200, #self.shape,
+            n_pts_per_ray = 256, #self.shape,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -348,7 +348,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=16, #self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 1280),
+                channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -402,7 +402,7 @@ class NeRVLightningModule(LightningModule):
         opacities: str= 'stochastic',
         norm_type: str="normalized"
     ) -> torch.Tensor:
-        features = image3d.expand(-1, 3, -1, -1, -1) #torch.cat([image3d]*3, dim=1)
+        features = image3d.repeat(1, 3, 1, 1, 1)
         
         if opacities=='stochastic':
             densities = self.opaque_net(image3d) #+ torch.randn_like(image3d)
@@ -426,8 +426,8 @@ class NeRVLightningModule(LightningModule):
         return screen, densities
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
-        code2d = torch.zeros(image2d.shape[0], 10, self.shape, self.shape, device=image2d.device)
-        penc2d = PositionalEncodingPermute2D(10)(code2d)
+        code2d = torch.zeros(image2d.shape[0], 10, self.shape, self.shape)
+        penc2d = PositionalEncodingPermute2D(10)(code2d).to(image2d.device)
         concat = torch.cat([image2d, 
                             penc2d,
                             camera_feat.view(camera_feat.shape[0], 
@@ -630,7 +630,7 @@ if __name__ == "__main__":
             # tensorboard_callback
         ],
         accumulate_grad_batches=4, 
-        strategy="ddp", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="dp", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
