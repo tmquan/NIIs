@@ -303,7 +303,7 @@ class NeRVLightningModule(LightningModule):
         # self.reduction = hparams.reduction
         self.save_hyperparameters()
 
-        self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
+        raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
             n_pts_per_ray = 256, #self.shape,
@@ -312,18 +312,22 @@ class NeRVLightningModule(LightningModule):
         )
 
         # self.raymarcher = EmissionAbsorptionRaymarcher()
-        self.raymarcher = EmissionAbsorptionRaymarcherFrontToBack() # X-Ray Raymarcher
+        raymarcher = EmissionAbsorptionRaymarcherFrontToBack() # X-Ray Raymarcher
 
-        self.visualizer = VolumeRenderer(
-            raysampler = self.raysampler, 
-            raymarcher = self.raymarcher,
+        visualizer = VolumeRenderer(
+            raysampler = raysampler, 
+            raymarcher = raymarcher,
         )
         
         print("Self Device: ", self.device)
 
         self.viewer = ScreenModel(
-            renderer = self.visualizer,
+            renderer = visualizer,
         )
+        
+        code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape)
+        penc2d = PositionalEncodingPermute2D(10)(code2d)
+        self.register_buffer("penc2d", penc2d)
 
         self.opaque_net = nn.Sequential(
             UNet(
@@ -394,6 +398,7 @@ class NeRVLightningModule(LightningModule):
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
+
     def forward(self, image3d):
         pass
 
@@ -426,10 +431,8 @@ class NeRVLightningModule(LightningModule):
         return screen, densities
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
-        code2d = torch.zeros(image2d.shape[0], 10, self.shape, self.shape)
-        penc2d = PositionalEncodingPermute2D(10)(code2d).to(image2d.device)
         concat = torch.cat([image2d, 
-                            penc2d,
+                            self.penc2d,
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
