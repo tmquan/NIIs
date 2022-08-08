@@ -325,9 +325,9 @@ class NeRVLightningModule(LightningModule):
             renderer = visualizer,
         )
         
-        code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape)
-        penc2d = PositionalEncodingPermute2D(10)(code2d)
-        self.register_buffer("penc2d", penc2d)
+        # code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape)
+        # penc2d = PositionalEncodingPermute2D(10)(code2d)
+        # self.register_buffer("penc2d", penc2d)
 
         self.opaque_net = nn.Sequential(
             UNet(
@@ -431,8 +431,10 @@ class NeRVLightningModule(LightningModule):
         return screen, densities
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
+        code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
+        penc2d = PositionalEncodingPermute2D(10)(code2d)
         concat = torch.cat([image2d, 
-                            self.penc2d,
+                            penc2d.to(image2d.device),
                             camera_feat.view(camera_feat.shape[0], 
                                              camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
@@ -494,8 +496,8 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
-                  + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) 
+        tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
+                  + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
 
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
 
