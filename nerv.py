@@ -306,7 +306,7 @@ class NeRVLightningModule(LightningModule):
         self.raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 200, #self.shape,
+            n_pts_per_ray = self.shape,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -346,7 +346,7 @@ class NeRVLightningModule(LightningModule):
         self.reform_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
-                in_channels=self.shape,
+                in_channels=16, #self.shape,
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
@@ -426,8 +426,8 @@ class NeRVLightningModule(LightningModule):
         return screen, densities
 
     def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
-        code2d = torch.zeros(image2d.shape[0], 250, self.shape, self.shape, device=image2d.device)
-        penc2d = PositionalEncodingPermute2D(250)(code2d)
+        code2d = torch.zeros(image2d.shape[0], 10, self.shape, self.shape, device=image2d.device)
+        penc2d = PositionalEncodingPermute2D(10)(code2d)
         concat = torch.cat([image2d, 
                             penc2d,
                             camera_feat.view(camera_feat.shape[0], 
