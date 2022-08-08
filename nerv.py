@@ -453,11 +453,11 @@ class NeRVLightningModule(LightningModule):
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
     
-        if batch_idx%5==1:
+        if batch_idx%4==1:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%5==2:
+        elif batch_idx%4==2:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%5==3:
+        elif batch_idx%4==3:
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
@@ -486,32 +486,16 @@ class NeRVLightningModule(LightningModule):
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
                   + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
-                # + self.l1loss(estmid_xr, estvol_xr) \
-                # + self.l1loss(estmid_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) 
                   
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-                  + self.l1loss(orgimg_xr, estimg_xr) \
+                  + self.l1loss(orgimg_xr, estimg_xr) 
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(orgcam_xr, reccam_xr) \
+                  + self.l1loss(orgcam_xr, reccam_xr) 
         
         tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
-                  + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) \
-                # + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
-
-
-        # if stage=='train':
-        #     opacities = 'stochastic'
-        #     tran_loss = self.l1loss(estalp_ct, 1.0 + torch.randn_like(estalp_ct)) \
-        #               + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) \
-        #            #  + self.l1loss(recalp_ct, 1.0 + torch.randn_like(recalp_ct)) \
-        # elif stage=='validation' or stage=='test':
-        # else:
-        #     opacities = 'deterministic'
-        #     tran_loss = self.l1loss(estalp_ct, torch.ones_like(estalp_ct)) \
-        #               + self.l1loss(estalp_xr, torch.ones_like(estalp_xr)) \
-        #            #  + self.l1loss(recalp_ct, torch.ones_like(recalp_ct)) \
+                  + self.l1loss(estalp_xr, 1.0 + torch.randn_like(estalp_xr)) 
 
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
 
@@ -635,6 +619,8 @@ if __name__ == "__main__":
         accumulate_grad_batches=4, 
         strategy="dp", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,
+        # amp_backend='apex',
+        # amp_level='O3', # see https://nvidia.github.io/apex/amp.html#opt-levels
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
         # gradient_clip_val=5, 
