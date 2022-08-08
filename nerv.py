@@ -507,19 +507,19 @@ class NeRVLightningModule(LightningModule):
         if batch_idx == 0:
             with torch.no_grad():
                 viz = torch.cat([
-                        torch.cat([orgvol_ct[...,self.shape//2], 
-                                   estimg_ct,
-                                   orgimg_xr], dim=-1),
-                        torch.cat([estvol_ct[...,self.shape//2],
-                                   recimg_ct, 
-                                   estimg_xr], dim=-1),
+                        torch.cat([orgvol_ct[...,self.shape//2].to('cpu'), 
+                                   estimg_ct.to('cpu'),
+                                   orgimg_xr.to('cpu')], dim=-1),
+                        torch.cat([estvol_ct[...,self.shape//2].to('cpu'),
+                                   recimg_ct.to('cpu'), 
+                                   estimg_xr.to('cpu')], dim=-1),
                         ], dim=-2)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
 
-                plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
-                                                    torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3), 
+                plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct.to('cpu'), estvol_ct.to('cpu'), estvol_xr.to('cpu')], dim=-2), 
+                                                    torch.cat([estalp_ct.to('cpu'), estalp_xr.to('cpu'), recalp_ct.to('cpu')], dim=-2)], dim=-3), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         return info
         # if optimizer_idx==0:
