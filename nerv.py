@@ -496,11 +496,11 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        # tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
-        #           + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
+        tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
+                  + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
 
-        tran_loss = self.l1loss(estalp_ct, torch.ones_like(batch["image3d"])) \
-                  + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
+        # tran_loss = self.l1loss(estalp_ct, torch.ones_like(batch["image3d"])) \
+        #           + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
 
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
 
