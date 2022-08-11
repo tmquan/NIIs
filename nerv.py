@@ -288,19 +288,9 @@ class NeRVLightningModule(LightningModule):
         super().__init__()
         self.logsdir = hparams.logsdir
         self.lr = hparams.lr
-        self.b1 = hparams.b1
-        self.b2 = hparams.b2
-        self.wd = hparams.wd
-        self.eps = hparams.eps
         self.shape = hparams.shape
         self.batch_size = hparams.batch_size
 
-        # self.theta = hparams.theta # use for factor to promote xray effect
-        # self.alpha = hparams.alpha
-        # self.kappa = hparams.kappa
-        # self.gamma = hparams.gamma
-        # self.delta = hparams.delta
-        # self.reduction = hparams.reduction
         self.save_hyperparameters()
 
         raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
@@ -324,11 +314,7 @@ class NeRVLightningModule(LightningModule):
         self.viewer = PictureModel(
             renderer = visualizer,
         )
-        
-        # code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape)
-        # penc2d = PositionalEncodingPermute2D(10)(code2d)
-        # self.register_buffer("penc2d", penc2d)
-
+    
         self.opacity_net = nn.Sequential(
             UNet(
                 spatial_dims=3,
@@ -496,8 +482,8 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
-                  + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
+        # tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
+        #           + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
         
         # tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
         #           + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
@@ -512,7 +498,7 @@ class NeRVLightningModule(LightningModule):
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
-        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
+        # self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
 
         if batch_idx == 0:
             with torch.no_grad():
@@ -532,16 +518,7 @@ class NeRVLightningModule(LightningModule):
                                                     torch.cat([estalp_ct.to('cpu'), estalp_xr.to('cpu'), recalp_ct.to('cpu')], dim=-2)], dim=-3), 
                                                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         return info
-        # if optimizer_idx==0:
-        #     return {f'loss': 1e0*cams_loss} 
-        # elif optimizer_idx==1:
-        #     return {f'loss': 1e0*im2d_loss} 
-        # elif optimizer_idx==2:
-        #     return {f'loss': 1e0*im3d_loss} 
-        # else:
-        #     return {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
-        
     def validation_step(self, batch, batch_idx):
         return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='validation')
 
@@ -562,12 +539,6 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # opt_cam = torch.optim.RAdam([{'params': self.frustum_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
-        # opt_scr = torch.optim.RAdam([{'params': self.opacity_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
-        # opt_vol = torch.optim.RAdam([{'params': self.clarity_net.parameters()},
-        #                              {'params': self.density_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
-        # # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        # return opt_cam, opt_scr, opt_vol #, opt_all
         return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
 
 if __name__ == "__main__":
@@ -580,11 +551,6 @@ if __name__ == "__main__":
     parser.add_argument("--shape", type=int, default=256, help="spatial size of the tensor")
     parser.add_argument("--epochs", type=int, default=501, help="number of epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
-    parser.add_argument("--wd", type=float, default=1e-6, help="adam: weight decay")
-    parser.add_argument("--eps", type=float, default=1e-8, help="adam: epsilon")
-    parser.add_argument("--b1", type=float, default=0.0, help="adam: 1st order momentum")
-    parser.add_argument("--b2", type=float, default=0.9, help="adam: 2nd order momentum")
-    
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
@@ -597,7 +563,7 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
 
     # Seed the application
-    seed_everything(2222)
+    seed_everything(42)
 
     # Callback
     checkpoint_callback = ModelCheckpoint(
@@ -605,8 +571,6 @@ if __name__ == "__main__":
         filename='{epoch:02d}-{validation_loss_epoch:.2f}',
         save_top_k=-1,
         save_last=True,
-        # monitor='validation_r_loss', 
-        # mode='min',
         every_n_epochs=5, 
     )
     lr_callback = LearningRateMonitor(logging_interval='step')
@@ -617,18 +581,14 @@ if __name__ == "__main__":
     trainer = Trainer.from_argparse_args(
         hparams, 
         max_epochs=hparams.epochs,
-        # ckpt_path = hparams.ckpt, #"logs/default/version_0/epoch=50.ckpt",
         logger=[tensorboard_logger],
         callbacks=[
             lr_callback,
             checkpoint_callback, 
-            # DeviceStatsMonitor(), 
-            # ModelSummary(max_depth=-1), 
-            # tensorboard_callback
         ],
         accumulate_grad_batches=4, 
         strategy="dp", #"horovod", #"deepspeed", #"ddp_sharded",
-        precision=16,
+        precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O3', # see https://nvidia.github.io/apex/amp.html#opt-levels
         # stochastic_weight_avg=True,
