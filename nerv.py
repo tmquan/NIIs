@@ -68,7 +68,7 @@ class EmissionAbsorptionRaymarcherFrontToBack(EmissionAbsorptionRaymarcher):
         opacities = 1.0 - torch.prod(1.0 - rays_densities, dim=-1, keepdim=True)
         return torch.cat((features, opacities), dim=-1)
 
-class ScreenModel(nn.Module):
+class PictureModel(nn.Module):
     def __init__(self, renderer):
         super().__init__()
         self._renderer = renderer
@@ -85,7 +85,7 @@ class ScreenModel(nn.Module):
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
-        return screen_RGB
+        return screen_RGB, rays_points
 
 class NeRVDataModule(LightningDataModule):
     def __init__(self, 
@@ -321,7 +321,7 @@ class NeRVLightningModule(LightningModule):
         
         print("Self Device: ", self.device)
 
-        self.viewer = ScreenModel(
+        self.viewer = PictureModel(
             renderer = visualizer,
         )
         
@@ -329,7 +329,7 @@ class NeRVLightningModule(LightningModule):
         # penc2d = PositionalEncodingPermute2D(10)(code2d)
         # self.register_buffer("penc2d", penc2d)
 
-        self.opaque_net = nn.Sequential(
+        self.opacity_net = nn.Sequential(
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -347,7 +347,7 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()  
         )
 
-        self.reform_net = nn.Sequential(
+        self.clarity_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
                 in_channels=16, #self.shape,
@@ -366,7 +366,7 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid(), 
         )
 
-        self.refine_net = nn.Sequential(
+        self.density_net = nn.Sequential(
             UNet(
                 spatial_dims=3,
                 in_channels=1,
@@ -384,7 +384,7 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()  
         )
 
-        self.camera_net = nn.Sequential(
+        self.frustum_net = nn.Sequential(
             DenseNet201(
                 spatial_dims=2,
                 in_channels=1,
@@ -402,7 +402,7 @@ class NeRVLightningModule(LightningModule):
     def forward(self, image3d):
         pass
 
-    def forward_screen(self, image3d: torch.Tensor, camera_feat: torch.Tensor, 
+    def forward_picture(self, image3d: torch.Tensor, frustum_feat: torch.Tensor, 
         factor: float=1.0, 
         opacities: str= 'stochastic',
         norm_type: str="normalized"
@@ -410,41 +410,41 @@ class NeRVLightningModule(LightningModule):
         features = image3d.repeat(1, 3, 1, 1, 1)
         
         if opacities=='stochastic':
-            densities = self.opaque_net(image3d) #+ torch.randn_like(image3d)
+            densities = self.opacity_net(image3d) #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            densities = self.opaque_net(image3d)
+            densities = self.opacity_net(image3d)
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
         
-        cameras = init_random_cameras(cam_type=FoVPerspectiveCameras, 
+        frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
-                            cam_ft=camera_feat*2. - 1.).to(image3d.device)
-        volumes = Volumes(
+                            cam_ft=frustum_feat*2. - 1.).to(image3d.device)
+        radiance = Volumes(
             features = features, 
             densities = densities / factor,
             voxel_size = 3.2 / self.shape,
         )
             
-        screen = self.viewer(volumes=volumes, cameras=cameras, norm_type=norm_type)
-        return screen, densities
+        pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type)
+        return pictures, densities
 
-    def forward_volume(self, image2d: torch.Tensor, camera_feat: torch.Tensor):
-        code2d = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
-        penc2d = PositionalEncodingPermute2D(10)(code2d)
-        concat = torch.cat([image2d, 
-                            penc2d.to(image2d.device),
-                            camera_feat.view(camera_feat.shape[0], 
-                                             camera_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
+    def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
+        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
+        pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
+        cat_features = torch.cat([image2d, 
+                                  pos_encoding.to(image2d.device),
+                                  frustum_feat.view(frustum_feat.shape[0], 
+                                                    frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        reform = self.reform_net(concat)# * 2.0 - 1.0) * 0.5 + 0.5
-        refine = self.refine_net(reform)# * 2.0 - 1.0) * 0.5 + 0.5
-        return reform, refine
+        clarity = self.clarity_net(cat_features)# * 2.0 - 1.0) * 0.5 + 0.5
+        density = self.density_net(clarity)# * 2.0 - 1.0) * 0.5 + 0.5
+        return clarity, density
     
-    def forward_camera(self, image2d: torch.Tensor):
-        camera = self.camera_net(image2d) #[0] # [0, 1] 
-        return camera
+    def forward_frustum(self, image2d: torch.Tensor):
+        frustum = self.frustum_net(image2d) #[0] # [0, 1] 
+        return frustum
 
     def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
         return self._sharing_step(batch, batch_idx, optimizer_idx, stage)   
@@ -472,17 +472,17 @@ class NeRVLightningModule(LightningModule):
             opacities = 'constant'
         
         # XR path
-        orgcam_xr = self.forward_camera(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_volume(orgimg_xr, orgcam_xr)
-        estimg_xr, estalp_xr = self.forward_screen(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
-        reccam_xr = self.forward_camera(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_volume(estimg_xr, reccam_xr)
+        orgcam_xr = self.forward_frustum(orgimg_xr)
+        estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
+        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
+        reccam_xr = self.forward_frustum(estimg_xr)
+        recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct, estalp_ct = self.forward_screen(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
-        estcam_ct = self.forward_camera(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_volume(estimg_ct, estcam_ct)
-        recimg_ct, recalp_ct = self.forward_screen(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        estcam_ct = self.forward_frustum(estimg_ct)
+        estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
+        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -496,8 +496,8 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)) \
-                  + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device))
+        tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
+                  + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
         
         # tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
         #           + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
@@ -505,7 +505,9 @@ class NeRVLightningModule(LightningModule):
         # tran_loss = self.l1loss(estalp_ct, torch.ones_like(batch["image3d"])) \
         #           + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
+
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
 
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
@@ -560,10 +562,10 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # opt_cam = torch.optim.RAdam([{'params': self.camera_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
-        # opt_scr = torch.optim.RAdam([{'params': self.opaque_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
-        # opt_vol = torch.optim.RAdam([{'params': self.reform_net.parameters()},
-        #                              {'params': self.refine_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        # opt_cam = torch.optim.RAdam([{'params': self.frustum_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        # opt_scr = torch.optim.RAdam([{'params': self.opacity_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
+        # opt_vol = torch.optim.RAdam([{'params': self.clarity_net.parameters()},
+        #                              {'params': self.density_net.parameters()},], lr=1e0*(self.lr or self.learning_rate))
         # # opt_all = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         # return opt_cam, opt_scr, opt_vol #, opt_all
         return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
