@@ -95,6 +95,9 @@ class NeRVDataModule(LightningDataModule):
         val_image2d_folders: str = "path/to/folder", 
         test_image3d_folders: str = "path/to/folder", 
         test_image2d_folders: str = "path/to/dir", 
+        train_samples: int = 1000,
+        val_samples: int = 400,
+        test_samples: int = 400,
         shape: int = 256,
         batch_size: int = 32
     ):
@@ -109,6 +112,9 @@ class NeRVDataModule(LightningDataModule):
         self.val_image2d_folders = val_image2d_folders
         self.test_image3d_folders = test_image3d_folders
         self.test_image2d_folders = test_image2d_folders
+        self.train_samples = train_samples
+        self.val_samples = val_samples
+        self.test_samples = test_samples
 
         # self.setup()
         def glob_files(folders: str=None, extension: str='*.nii.gz'):
@@ -190,7 +196,7 @@ class NeRVDataModule(LightningDataModule):
             keys=["image3d", "image2d"],
             data=[self.train_image3d_files, self.train_image2d_files], 
             transform=self.train_transforms,
-            length=1000,
+            length=self.train_samples,
             batch_size=self.batch_size,
         )
 
@@ -247,7 +253,7 @@ class NeRVDataModule(LightningDataModule):
             keys=["image3d", "image2d"],
             data=[self.val_image3d_files, self.val_image2d_files], 
             transform=self.val_transforms,
-            length=400,
+            length=self.val_samples,
             batch_size=self.batch_size,
         )
         
@@ -550,6 +556,9 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
     parser.add_argument("--shape", type=int, default=256, help="spatial size of the tensor")
     parser.add_argument("--epochs", type=int, default=501, help="number of epochs")
+    parser.add_argument("--train_samples", type=int, default=1000, help="training samples")
+    parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
+    parser.add_argument("--test_samples", type=int, default=400, help="test samples")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
@@ -687,6 +696,9 @@ if __name__ == "__main__":
         val_image2d_folders = val_image2d_folders, 
         test_image3d_folders = test_image3d_folders, 
         test_image2d_folders = test_image2d_folders, 
+        train_samples = hparams.train_samples,
+        val_samples = hparams.val_samples,
+        test_samples = hparams.test_samples,
         batch_size = hparams.batch_size, 
         shape = hparams.shape
     )
