@@ -296,7 +296,7 @@ class NeRVLightningModule(LightningModule):
         self.lr = hparams.lr
         self.shape = hparams.shape
         self.batch_size = hparams.batch_size
-
+        self.devices = hparams.devices
         self.save_hyperparameters()
 
         raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
@@ -332,8 +332,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -350,8 +350,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -369,8 +369,8 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout=0.5,
-                # norm=Norm.BATCH,
+                dropout=0.5,
+                norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -382,8 +382,8 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                # dropout_prob=0.5,
-                # norm=Norm.BATCH,
+                dropout_prob=0.5,
+                norm=Norm.BATCH,
                 pretrained=True, 
             ),
             nn.Sigmoid(),
@@ -420,7 +420,7 @@ class NeRVLightningModule(LightningModule):
         )
             
         pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type)
-        return pictures, densities
+        return pictures, raypoint #densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
@@ -509,20 +509,20 @@ class NeRVLightningModule(LightningModule):
         if batch_idx == 0:
             with torch.no_grad():
                 viz = torch.cat([
-                        torch.cat([orgvol_ct[...,self.shape//2].to('cpu'), 
-                                   estimg_ct.to('cpu'),
-                                   orgimg_xr.to('cpu')], dim=-1),
-                        torch.cat([estvol_ct[...,self.shape//2].to('cpu'),
-                                   recimg_ct.to('cpu'), 
-                                   estimg_xr.to('cpu')], dim=-1),
+                        torch.cat([orgvol_ct[...,self.shape//2], 
+                                   estimg_ct,
+                                   orgimg_xr], dim=-1),
+                        torch.cat([estvol_ct[...,self.shape//2],
+                                   recimg_ct, 
+                                   estimg_xr], dim=-1),
                         ], dim=-2)
                 grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
                 tensorboard = self.logger.experiment
                 tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
-
-                plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct.to('cpu'), estvol_ct.to('cpu'), estvol_xr.to('cpu')], dim=-2), 
-                                                    torch.cat([estalp_ct.to('cpu'), estalp_xr.to('cpu'), recalp_ct.to('cpu')], dim=-2)], dim=-3), 
-                                                    tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+                if self.devices==1:
+                    plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
+                                                        torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3), 
+                                                        tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         return info
 
     def validation_step(self, batch, batch_idx):
