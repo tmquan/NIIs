@@ -420,7 +420,7 @@ class NeRVLightningModule(LightningModule):
         )
             
         pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type)
-        return pictures, raypoint #densities
+        return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
