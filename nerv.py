@@ -73,7 +73,7 @@ class PictureModel(nn.Module):
         super().__init__()
         self._renderer = renderer
         
-    def forward(self, cameras, volumes, norm_type="standardized"):
+    def forward(self, cameras, volumes, norm_type="standardized", scaler=1.0):
         screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         rays_points = ray_bundle_to_ray_points(ray_bundles)
 
@@ -85,6 +85,8 @@ class PictureModel(nn.Module):
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
+        screen_RGB *= scaler
+        screen_RGB = torch.clamp(screen_RGB, 0.0, 1.0)
         return screen_RGB, rays_points
 
 class NeRVDataModule(LightningDataModule):
@@ -295,6 +297,8 @@ class NeRVLightningModule(LightningModule):
         self.logsdir = hparams.logsdir
         self.lr = hparams.lr
         self.shape = hparams.shape
+        self.scaler = hparams.scaler
+        self.factor = hparams.factor
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
         self.save_hyperparameters()
@@ -396,6 +400,7 @@ class NeRVLightningModule(LightningModule):
 
     def forward_picture(self, image3d: torch.Tensor, frustum_feat: torch.Tensor, 
         factor: float=1.0, 
+        scaler: float=1.0, 
         opacities: str= 'stochastic',
         norm_type: str="normalized"
     ) -> torch.Tensor:
@@ -419,7 +424,7 @@ class NeRVLightningModule(LightningModule):
             voxel_size = 3.2 / self.shape,
         )
             
-        pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type)
+        pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
         return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
@@ -451,9 +456,9 @@ class NeRVLightningModule(LightningModule):
             orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
         elif batch_idx%4==2:
             orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        elif batch_idx%4==3:
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # elif batch_idx%4==3:
+        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
         # with torch.cuda.amp.autocast():
         if stage=='train':
@@ -466,15 +471,15 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=20.0, opacities=opacities, norm_type="normalized")
+        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
 
         # CT path
-        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=20.0, opacities=opacities, norm_type="normalized")
+        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -507,22 +512,28 @@ class NeRVLightningModule(LightningModule):
         # self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
 
         if batch_idx == 0:
-            with torch.no_grad():
-                viz = torch.cat([
-                        torch.cat([orgvol_ct[...,self.shape//2], 
-                                   estimg_ct,
-                                   orgimg_xr], dim=-1),
-                        torch.cat([estvol_ct[...,self.shape//2],
-                                   recimg_ct, 
-                                   estimg_xr], dim=-1),
-                        ], dim=-2)
-                grid = torchvision.utils.make_grid(viz, normalize=False, scale_each=False, nrow=1, padding=0)
-                tensorboard = self.logger.experiment
-                tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
-                if self.devices==1:
-                    plot_2d_or_3d_image(data=torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
-                                                        torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3), 
-                                                        tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+            # if self.devices==1:
+            # viz3d = torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
+            #                    torch.cat([estalp_ct, estalp_xr, recalp_ct], dim=-2)], dim=-3)
+            # plot_2d_or_3d_image(data=viz3d, 
+            #                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
+        
+            # with torch.no_grad():
+            viz2d = torch.cat([
+                    torch.cat([orgvol_ct[...,self.shape//2], 
+                                estimg_ct,
+                                orgimg_xr], dim=-1),
+                    torch.cat([estvol_ct[...,self.shape//2],
+                                recimg_ct, 
+                                estimg_xr], dim=-1),
+                    torch.cat([estalp_ct[...,self.shape//2],
+                               estalp_xr[...,self.shape//2],
+                               recalp_ct[...,self.shape//2]], dim=-1),
+                    ], dim=-2)
+            grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
+            tensorboard = self.logger.experiment
+            tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
+        
         return info
 
     def validation_step(self, batch, batch_idx):
@@ -559,6 +570,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_samples", type=int, default=1000, help="training samples")
     parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
+    parser.add_argument("--scaler", type=float, default=10.0, help="XRay amplification")
+    parser.add_argument("--factor", type=float, default=64.0, help="XRay transparency")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
