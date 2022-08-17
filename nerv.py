@@ -525,11 +525,11 @@ class NeRVLightningModule(LightningModule):
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss \
                         +1e0*rayf_loss + 1e0*rayd_loss} 
         
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_rayf_loss', rayf_loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_rayd_loss', rayd_loss, on_step=True, prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_rayf_loss', rayf_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_rayd_loss', rayd_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
 
         if batch_idx == 0:
             # if self.devices==1:
