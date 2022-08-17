@@ -299,8 +299,8 @@ class NeRVLightningModule(LightningModule):
         self.logsdir = hparams.logsdir
         self.lr = hparams.lr
         self.shape = hparams.shape
-        self.scaler = hparams.scaler
         self.factor = hparams.factor
+        self.scaler = hparams.scaler
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
         self.save_hyperparameters()
@@ -428,7 +428,7 @@ class NeRVLightningModule(LightningModule):
             
         pictures, raypoint, ray_features, ray_densities \
             = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
-        return pictures, densities, ray_features, ray_densities
+        return pictures, densities, ray_features, ray_densities*self.factor
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)

@@ -300,7 +300,7 @@ class ImplicitRenderer(torch.nn.Module):
         )
         # images - minibatch x ... x (feature_dim + opacity_dim)
 
-        return images, ray_bundle, rays_densities, rays_features
+        return images, ray_bundle, rays_features, rays_densities
 
 
 # The volume renderer class should be initialized with a
