@@ -425,7 +425,7 @@ class NeRVLightningModule(LightningModule):
         )
             
         pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
-        return pictures, raypoint, densities
+        return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
@@ -471,16 +471,15 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estray_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        recimg_xr, recray_xr, recalp_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # CT path
-        estimg_ct, estray_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recray_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -495,8 +494,8 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        rays_loss = self.l1loss(recray_ct, estray_ct) \
-                  + self.l1loss(recray_xr, estray_xr) 
+        # rays_loss = self.l1loss(recray_ct, estray_ct) \
+        #           + self.l1loss(recray_xr, estray_xr) 
 
         # tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
         #           + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
@@ -508,13 +507,13 @@ class NeRVLightningModule(LightningModule):
         #           + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*rays_loss} 
-
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*rays_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_rays_loss', rays_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        # self.log(f'{stage}_rays_loss', rays_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
 
         if batch_idx == 0:
             # if self.devices==1:
