@@ -508,22 +508,8 @@ class NeRVLightningModule(LightningModule):
         rayd_loss = self.l1loss(estrds_ct, recrds_ct) \
                   + self.l1loss(estrds_xr, recrds_xr) 
                   
-        # rays_loss = self.l1loss(recray_ct, estray_ct) \
-        #           + self.l1loss(recray_xr, estray_xr) 
-
-        # tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
-        #           + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
-        
-        # tran_loss = self.l1loss(estalp_ct, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) \
-        #           + self.l1loss(estalp_xr, torch.distributions.normal.Normal(1.0, 1.0).sample(batch["image3d"].shape).to(_device)) 
-
-        # tran_loss = self.l1loss(estalp_ct, torch.ones_like(batch["image3d"])) \
-        #           + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
-
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*rays_loss} 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss \
-                        +1e0*rayf_loss + 1e0*rayd_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss \
+                       + 1e0*cams_loss + 1e0*rayf_loss + 1e0*rayd_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -538,14 +524,13 @@ class NeRVLightningModule(LightningModule):
             # plot_2d_or_3d_image(data=viz3d, 
             #                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
         
-            # with torch.no_grad():
             viz2d = torch.cat([
                     torch.cat([orgvol_ct[...,self.shape//2], 
-                                estimg_ct,
-                                orgimg_xr], dim=-1),
+                               estimg_ct,
+                               orgimg_xr], dim=-1),
                     torch.cat([estvol_ct[...,self.shape//2],
-                                recimg_ct, 
-                                estimg_xr], dim=-1),
+                               recimg_ct, 
+                               estimg_xr], dim=-1),
                     torch.cat([estalp_ct[...,self.shape//2],
                                estalp_xr[...,self.shape//2],
                                recalp_ct[...,self.shape//2]], dim=-1),
