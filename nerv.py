@@ -86,7 +86,7 @@ class PictureModel(nn.Module):
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
         screen_RGB *= scaler
-        screen_RGB = torch.clamp(screen_RGB, 0.0, 1.0)
+        # screen_RGB = torch.clamp(screen_RGB, 0.0, 1.0)
         return screen_RGB, rays_points
 
 class NeRVDataModule(LightningDataModule):
@@ -425,7 +425,7 @@ class NeRVLightningModule(LightningModule):
         )
             
         pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
-        return pictures, densities
+        return pictures, raypoint, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
@@ -471,15 +471,16 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_xr, estray_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-
+        recimg_xr, recray_xr, recalp_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        
         # CT path
-        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_ct, estray_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        recimg_ct, recray_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -489,10 +490,14 @@ class NeRVLightningModule(LightningModule):
                   
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
+                #   + self.l1loss(orgimg_xr, recimg_xr) \
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
+        rays_loss = self.l1loss(recray_ct, estray_ct) \
+                  + self.l1loss(recray_xr, estray_xr) 
+
         # tran_loss = self.l1loss(estalp_ct, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device)) \
         #           + self.l1loss(estalp_xr, torch.distributions.uniform.Uniform(0.5, 1.5).sample(batch["image3d"].shape).to(_device))
         
@@ -503,13 +508,13 @@ class NeRVLightningModule(LightningModule):
         #           + self.l1loss(estalp_xr, torch.ones_like(batch["image3d"])) 
 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss+ 1e0*tran_loss} 
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*rays_loss} 
 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
-
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
-        # self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_rays_loss', rays_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
 
         if batch_idx == 0:
             # if self.devices==1:
@@ -532,7 +537,7 @@ class NeRVLightningModule(LightningModule):
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
-            tensorboard.add_image(f'{stage}_samples', grid, self.current_epoch*self.batch_size + batch_idx)
+            tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         
         return info
 
@@ -544,7 +549,7 @@ class NeRVLightningModule(LightningModule):
 
     def evaluation_epoch_end(self, outputs, stage: Optional[str]='evaluation'):
         loss = torch.stack([x[f'loss'] for x in outputs]).mean()
-        self.log(f'{stage}_loss_epoch', loss, on_step=False, prog_bar=True, logger=True)
+        self.log(f'{stage}_loss_epoch', loss, on_step=False, prog_bar=True, logger=True, sync_dist=True)
 
     def train_epoch_end(self, outputs):
         return self.evaluation_epoch_end(outputs, stage='train')
