@@ -349,7 +349,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=16, #self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 1600),
+                channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -452,22 +452,23 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-    
-        if batch_idx%4==1:
-            orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        elif batch_idx%4==2:
-            orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        # elif batch_idx%4==3:
-        #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
-        # with torch.cuda.amp.autocast():
+
         if stage=='train':
             opacities = 'stochastic'
+            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+            if batch_idx%4==1:
+                orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            elif batch_idx%4==2:
+                orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+            elif batch_idx%4==3:
+                opacities = 'constant'
+            #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+            #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+
         elif stage=='validation' or stage=='test':
             opacities = 'deterministic'
-        elif stage=='constant':
-            opacities = 'constant'
+            orgcam_ct = 0.5*torch.ones([self.batch_size, 5]).to(_device)
         
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
