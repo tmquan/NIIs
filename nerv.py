@@ -74,8 +74,7 @@ class PictureModel(nn.Module):
         self._renderer = renderer
         
     def forward(self, cameras, volumes, norm_type="standardized", scaler=1.0):
-        screen_RGBA, ray_bundles, \
-        ray_features, ray_densities = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
+        screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         rays_points = ray_bundle_to_ray_points(ray_bundles)
 
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
@@ -88,7 +87,7 @@ class PictureModel(nn.Module):
             screen_RGB = normalized(standardized(screen_RGB))
         screen_RGB *= scaler
         # screen_RGB = torch.clamp(screen_RGB, 0.0, 1.0)
-        return screen_RGB, rays_points, ray_features, ray_densities
+        return screen_RGB, rays_points #, ray_features, ray_densities
 
 
 class NeRVDataModule(LightningDataModule):
@@ -339,7 +338,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -357,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -376,7 +375,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 # dropout=0.5,
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid()  
@@ -389,7 +388,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
                 # dropout_prob=0.5,
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 pretrained=True, 
             ),
             nn.Sigmoid(),
@@ -426,9 +425,8 @@ class NeRVLightningModule(LightningModule):
             voxel_size = 3.2 / self.shape,
         )
             
-        pictures, raypoint, ray_features, ray_densities \
-            = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
-        return pictures, densities, ray_features, ray_densities*self.factor
+        pictures, raypoint = self.viewer(volumes=radiance, cameras=frustums, norm_type=norm_type, scaler=scaler)
+        return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
@@ -474,20 +472,16 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estalp_xr, \
-        estrft_xr, estrds_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        recimg_xr, recalp_xr, \
-        recrft_xr, recrds_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        # recimg_xr, recalp_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # CT path
-        estimg_ct, estalp_ct, \
-        estrft_ct, estrds_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recalp_ct, \
-        recrft_ct, recrds_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
@@ -502,20 +496,11 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
         
-        rayf_loss = self.l1loss(estrft_ct, recrft_ct) \
-                  + self.l1loss(estrft_xr, recrft_xr) 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
-        rayd_loss = self.l1loss(estrds_ct, recrds_ct) \
-                  + self.l1loss(estrds_xr, recrds_xr) 
-                  
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss \
-                       + 1e0*cams_loss + 1e0*rayf_loss + 1e0*rayd_loss} 
-        
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_rayf_loss', rayf_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_rayd_loss', rayd_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
 
         if batch_idx == 0:
             # if self.devices==1:
