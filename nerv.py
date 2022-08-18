@@ -341,7 +341,15 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            nn.Sigmoid()  
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=(32, 32, 32), 
+            #     feature_size=48,
+            # ),
+            # nn.Sigmoid(),  
         )
 
         self.clarity_net = nn.Sequential(
@@ -359,8 +367,17 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # SwinUNETR(
+            #     spatial_dims=2,
+            #     in_channels=16,
+            #     out_channels=self.shape, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=(64, 64), 
+            #     feature_size=48
+            # ),
+            Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid(), 
+            # nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -378,7 +395,15 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            nn.Sigmoid()  
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1, # value and alpha
+            #     use_checkpoint=True, 
+            #     img_size=(32, 32, 32), 
+            #     feature_size=48,
+            # ),
+            # nn.Sigmoid(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -391,7 +416,20 @@ class NeRVLightningModule(LightningModule):
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.Sigmoid(),
+            # ViT(
+            #     img_size=(self.shape, self.shape), 
+            #     patch_size=(16, 16),
+            #     spatial_dims=2,
+            #     in_channels=1,
+            #     num_classes=5,
+            #     pos_embed='conv', 
+            #     classification=True, 
+            #     hidden_size=768,
+            #     mlp_dim=3072,
+            #     num_layers=12,
+            #     num_heads=12,
+            # ),
+            # nn.Sigmoid(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -441,7 +479,7 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d) #[0] # [0, 1] 
+        frustum = self.frustum_net(image2d) #[0]# [0, 1] 
         return frustum
 
     def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
