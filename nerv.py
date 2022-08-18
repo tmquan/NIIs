@@ -349,7 +349,7 @@ class NeRVLightningModule(LightningModule):
             #     img_size=(32, 32, 32), 
             #     feature_size=48,
             # ),
-            nn.Tanh(),  
+            nn.Sigmoid(),  
         )
 
         self.clarity_net = nn.Sequential(
@@ -377,7 +377,7 @@ class NeRVLightningModule(LightningModule):
             # ),
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh(), 
+            nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -403,7 +403,7 @@ class NeRVLightningModule(LightningModule):
             #     img_size=(32, 32, 32), 
             #     feature_size=48,
             # ),
-            nn.Tanh(),  
+            nn.Sigmoid(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -429,7 +429,7 @@ class NeRVLightningModule(LightningModule):
             #     num_layers=12,
             #     num_heads=12,
             # ),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -446,9 +446,9 @@ class NeRVLightningModule(LightningModule):
         features = image3d.repeat(1, 3, 1, 1, 1)
         
         if opacities=='stochastic':
-            densities = self.opacity_net(image3d * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
+            densities = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            densities = self.opacity_net(image3d * 2. - 1.) * .5 + .5
+            densities = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
         
@@ -474,12 +474,12 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        clarity = self.clarity_net(cat_features * 2. - 1.) * .5 + .5
-        density = self.density_net(clarity * 2. - 1.) * .5 + .5
+        clarity = self.clarity_net(cat_features) # * 2. - 1.) * .5 + .5
+        density = self.density_net(clarity) # * 2. - 1.) * .5 + .5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
     def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
@@ -490,7 +490,6 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-
 
         # if stage=='train':
         #     opacities = 'stochastic'
@@ -511,16 +510,16 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_xr, estalp_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type=None)
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        # recimg_xr, recalp_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        # recimg_xr, recalp_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type=None)
         
         # CT path
-        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        estimg_ct, estalp_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type=None)
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities=opacities, scaler=self.scaler, norm_type=None)
+        recimg_ct, recalp_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type=None)
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
