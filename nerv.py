@@ -461,8 +461,8 @@ class NeRVLightningModule(LightningModule):
                 orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             elif batch_idx%4==2:
                 orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-            elif batch_idx%4==3:
-                opacities = 'constant'
+            # elif batch_idx%4==3:
+            #     opacities = 'constant'
             #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
             #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
