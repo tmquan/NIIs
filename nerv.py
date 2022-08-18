@@ -492,21 +492,21 @@ class NeRVLightningModule(LightningModule):
         orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
 
 
-        if stage=='train':
-            opacities = 'stochastic'
-            orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-            if batch_idx%4==1:
-                orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            elif batch_idx%4==2:
-                orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-            # elif batch_idx%4==3:
-            #     opacities = 'constant'
-            #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-            #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # if stage=='train':
+        #     opacities = 'stochastic'
+        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        #     if batch_idx%4==1:
+        #         orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     elif batch_idx%4==2:
+        #         orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        #     # elif batch_idx%4==3:
+        #     #     opacities = 'constant'
+        #     #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        #     #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
 
-        elif stage=='validation' or stage=='test':
-            opacities = 'deterministic'
-            orgcam_ct = 0.5*torch.ones([self.batch_size, 5]).to(_device)
+        # elif stage=='validation' or stage=='test':
+        #     opacities = 'deterministic'
+        #     orgcam_ct = 0.5*torch.ones([self.batch_size, 5]).to(_device)
         
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
@@ -637,7 +637,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        accumulate_grad_batches=10, 
+        # accumulate_grad_batches=10, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
