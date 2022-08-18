@@ -467,7 +467,7 @@ class NeRVLightningModule(LightningModule):
         return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
-        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape).requires_grad_(False)
+        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape)
         pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
         cat_features = torch.cat([image2d, 
                                   pos_encoding.to(image2d.device),
