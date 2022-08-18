@@ -446,9 +446,9 @@ class NeRVLightningModule(LightningModule):
         features = image3d.repeat(1, 3, 1, 1, 1)
         
         if opacities=='stochastic':
-            densities = self.opacity_net(image3d * 2. - 1.) *.5 + .5 #+ torch.randn_like(image3d)
+            densities = self.opacity_net(image3d * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            densities = self.opacity_net(image3d * 2. - 1.) *.5 + .5
+            densities = self.opacity_net(image3d * 2. - 1.) * .5 + .5
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
         
@@ -474,12 +474,12 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        clarity = self.clarity_net(cat_features * 2.0 - 1.0) * 0.5 + 0.5
-        density = self.density_net(clarity * 2.0 - 1.0) * 0.5 + 0.5
+        clarity = self.clarity_net(cat_features * 2. - 1.) * .5 + .5
+        density = self.density_net(clarity * 2. - 1.) * .5 + .5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d * 2.0 - 1.0) * 0.5 + 0.5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
     def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
