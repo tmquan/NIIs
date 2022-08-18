@@ -349,7 +349,7 @@ class NeRVLightningModule(LightningModule):
             #     img_size=(32, 32, 32), 
             #     feature_size=48,
             # ),
-            # nn.Sigmoid(),  
+            nn.Tanh(),  
         )
 
         self.clarity_net = nn.Sequential(
@@ -377,7 +377,7 @@ class NeRVLightningModule(LightningModule):
             # ),
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid(), 
+            nn.Tanh(), 
         )
 
         self.density_net = nn.Sequential(
@@ -403,7 +403,7 @@ class NeRVLightningModule(LightningModule):
             #     img_size=(32, 32, 32), 
             #     feature_size=48,
             # ),
-            # nn.Sigmoid(),  
+            nn.Tanh(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -429,7 +429,7 @@ class NeRVLightningModule(LightningModule):
             #     num_layers=12,
             #     num_heads=12,
             # ),
-            # nn.Sigmoid(),
+            nn.Tanh(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -446,9 +446,9 @@ class NeRVLightningModule(LightningModule):
         features = image3d.repeat(1, 3, 1, 1, 1)
         
         if opacities=='stochastic':
-            densities = self.opacity_net(image3d) #+ torch.randn_like(image3d)
+            densities = self.opacity_net(image3d * 2. - 1.) *.5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            densities = self.opacity_net(image3d)
+            densities = self.opacity_net(image3d * 2. - 1.) *.5 + .5
         elif opacities=='constant':
             densities = torch.ones_like(image3d)
         
@@ -474,12 +474,12 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        clarity = self.clarity_net(cat_features)# * 2.0 - 1.0) * 0.5 + 0.5
-        density = self.density_net(clarity)# * 2.0 - 1.0) * 0.5 + 0.5
+        clarity = self.clarity_net(cat_features * 2.0 - 1.0) * 0.5 + 0.5
+        density = self.density_net(clarity * 2.0 - 1.0) * 0.5 + 0.5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d) #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d * 2.0 - 1.0) * 0.5 + 0.5 #[0]# [0, 1] 
         return frustum
 
     def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
