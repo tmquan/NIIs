@@ -598,7 +598,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        accumulate_grad_batches=4, 
+        accumulate_grad_batches=10, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
