@@ -489,23 +489,34 @@ class NeRVLightningModule(LightningModule):
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
-        orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
-        # if stage=='train':
-        #     opacities = 'stochastic'
-        #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
-        #     if batch_idx%4==1:
-        #         orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     elif batch_idx%4==2:
-        #         orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
-        #     # elif batch_idx%4==3:
-        #     #     opacities = 'constant'
-        #     #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
-        #     #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        if stage=='train':
+             # Calculate interpolation
+            alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+            vol3d = orgvol_ct.detach().clone()
+            noise = torch.rand_like(vol3d)
+            alpha = alpha.expand_as(vol3d)
+            orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+            # orgvol_ct = Variable(orgvol_ct, requires_grad=True)
 
-        # elif stage=='validation' or stage=='test':
-        #     opacities = 'deterministic'
-        #     orgcam_ct = 0.5*torch.ones([self.batch_size, 5]).to(_device)
+        # orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+
+        # # if stage=='train':
+        # #     opacities = 'stochastic'
+        # #     orgcam_ct = torch.distributions.uniform.Uniform(0, 1).sample([self.batch_size, 5]).to(_device)
+        # #     if batch_idx%4==1:
+        # #         orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        # #     elif batch_idx%4==2:
+        # #         orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+        # #     # elif batch_idx%4==3:
+        # #     #     opacities = 'constant'
+        # #     #     orgvol_ct = torch.distributions.uniform.Uniform(0, 1).sample(batch["image3d"].shape).to(_device)
+        # #     #     orgimg_xr = torch.distributions.uniform.Uniform(0, 1).sample(batch["image2d"].shape).to(_device)
+
+        # # elif stage=='validation' or stage=='test':
+        # #     opacities = 'deterministic'
+        # #     orgcam_ct = 0.5*torch.ones([self.batch_size, 5]).to(_device)
         
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
