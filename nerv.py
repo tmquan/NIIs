@@ -529,7 +529,9 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estvol_xr, recmid_xr) \
                   + self.l1loss(estvol_xr, recvol_xr) \
                   + self.l1loss(estalp_ct, recalp_ct) \
-                  + self.l1loss(estalp_xr, recalp_xr) 
+                  + self.l1loss(estalp_xr, recalp_xr) \
+                  + self.l1loss(estalp_ct, torch.ones_like(recalp_ct)) \
+                  + self.l1loss(estalp_xr, torch.ones_like(recalp_xr)) 
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
