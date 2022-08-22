@@ -377,7 +377,7 @@ class NeRVLightningModule(LightningModule):
             # ),
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid(), 
+            # nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -429,7 +429,7 @@ class NeRVLightningModule(LightningModule):
             #     num_layers=12,
             #     num_heads=12,
             # ),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
