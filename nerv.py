@@ -1,5 +1,6 @@
 import os
-import math 
+import warnings
+warnings.filterwarnings("ignore")
 from argparse import ArgumentParser
 
 from pytorch_lightning import Trainer
@@ -429,7 +430,7 @@ class NeRVLightningModule(LightningModule):
             #     num_layers=12,
             #     num_heads=12,
             # ),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -482,7 +483,7 @@ class NeRVLightningModule(LightningModule):
         frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
-    def training_step(self, batch, batch_idx, optimizer_idx=None, stage: Optional[str]='train'):
+    def training_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='train'):
         return self._sharing_step(batch, batch_idx, optimizer_idx, stage)   
 
     def _sharing_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -527,24 +528,33 @@ class NeRVLightningModule(LightningModule):
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(orgvol_ct, estmid_ct) \
                   + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, recvol_xr) \
-                  + self.l1loss(estalp_ct, recalp_ct) \
-                  + self.l1loss(estalp_xr, recalp_xr) \
-                  + self.l1loss(estalp_ct, torch.rand_like(recalp_ct)) \
-                  + self.l1loss(estalp_xr, torch.rand_like(recalp_xr)) 
+                  + self.l1loss(estvol_xr, recvol_xr) 
+
+        tran_loss = self.l1loss(estalp_ct, recalp_ct) \
+                  + self.l1loss(estalp_xr, recalp_xr) 
+                # + self.l1loss(estalp_ct, torch.rand_like(recalp_ct)) \
+                # + self.l1loss(estalp_xr, torch.rand_like(recalp_xr)) 
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
-                #   + self.l1loss(orgimg_xr, recimg_xr) \
+                # + self.l1loss(orgimg_xr, recimg_xr) \
                     
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        if optimizer_idx==0: # forward picture
+            info = {f'loss': 1e0*im2d_loss + 1e0*tran_loss} 
+        if optimizer_idx==1: # forward density
+            info = {f'loss': 1e0*im3d_loss}
+        if optimizer_idx==2: # forward density
+            info = {f'loss': 1e0*cams_loss}
+        else:    
+            info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
 
         if batch_idx == 0:
             # if self.devices==1:
@@ -590,8 +600,15 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-
+        # return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        return torch.optim.RAdam([
+                {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+               torch.optim.RAdam([
+                {'params': self.clarity_net.parameters()}, 
+                {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+               torch.optim.RAdam([
+                {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+                        
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--conda_env", type=str, default="NeRV")
@@ -643,7 +660,7 @@ if __name__ == "__main__":
             checkpoint_callback, 
         ],
         # accumulate_grad_batches=10, 
-        strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="ddp", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O3', # see https://nvidia.github.io/apex/amp.html#opt-levels
