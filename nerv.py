@@ -508,7 +508,7 @@ class NeRVLightningModule(LightningModule):
         #         orgimg_xr = torch.rand_like(orgimg_xr)
 
         if stage=='train':
-            if (batch_idx % 4) == 1:
+            if (batch_idx % 2) == 1:
                 orgvol_ct = torch.rand_like(orgvol_ct)
         
          
