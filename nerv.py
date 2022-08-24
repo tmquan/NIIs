@@ -508,8 +508,15 @@ class NeRVLightningModule(LightningModule):
         #         orgimg_xr = torch.rand_like(orgimg_xr)
 
         if stage=='train':
-            if (batch_idx % 2) == 1:
+            if (batch_idx % 3) == 1:
                 orgvol_ct = torch.rand_like(orgvol_ct)
+            elif (batch_idx % 3) == 2:
+                # Calculate interpolation
+                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                vol3d = orgvol_ct.detach().clone()
+                noise = torch.rand_like(vol3d)
+                alpha = alpha.expand_as(vol3d)
+                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
