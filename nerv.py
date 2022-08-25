@@ -564,15 +564,15 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(orgcam_xr, reccam_xr) \
                 # + self.l1loss(orgcam_np, estcam_np) \
 
-        if optimizer_idx==0: # forward picture
-            info = {f'loss': 1e0*im2d_loss + 1e0*tran_loss} 
-        if optimizer_idx==1: # forward density
-            info = {f'loss': 1e0*im3d_loss}
-        if optimizer_idx==2: # forward density
-            info = {f'loss': 1e0*cams_loss}
-        else:    
-            info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
+        # if optimizer_idx==0: # forward picture
+        #     info = {f'loss': 1e0*im2d_loss + 1e0*tran_loss} 
+        # if optimizer_idx==1: # forward density
+        #     info = {f'loss': 1e0*im3d_loss}
+        # if optimizer_idx==2: # forward density
+        #     info = {f'loss': 1e0*cams_loss}
+        # else:    
+        #     info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -603,7 +603,7 @@ class NeRVLightningModule(LightningModule):
         return info
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        return self._sharing_step(batch, batch_idx, optimizer_idx, stage='train')
+        return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='train')
 
     def validation_step(self, batch, batch_idx):
         return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='validation')
