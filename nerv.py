@@ -625,14 +625,14 @@ class NeRVLightningModule(LightningModule):
         return self.evaluation_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        return torch.optim.RAdam([
-                {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-               torch.optim.RAdam([
-                {'params': self.clarity_net.parameters()}, 
-                {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-               torch.optim.RAdam([
-                {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        # return torch.optim.RAdam([
+        #         {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        #        torch.optim.RAdam([
+        #         {'params': self.clarity_net.parameters()}, 
+        #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        #        torch.optim.RAdam([
+        #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
                         
 if __name__ == "__main__":
     parser = ArgumentParser()
