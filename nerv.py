@@ -602,8 +602,8 @@ class NeRVLightningModule(LightningModule):
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         return info
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='train')
+    def training_step(self, batch, batch_idx, optimizer_idx=None):
+        return self._sharing_step(batch, batch_idx, optimizer_idx=optimizer_idx, stage='train')
 
     def validation_step(self, batch, batch_idx):
         return self._sharing_step(batch, batch_idx, optimizer_idx=None, stage='validation')
