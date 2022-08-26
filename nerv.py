@@ -301,6 +301,7 @@ class NeRVLightningModule(LightningModule):
         self.shape = hparams.shape
         self.factor = hparams.factor
         self.scaler = hparams.scaler
+        self.weight = hparams.weight
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
         self.save_hyperparameters()
@@ -551,8 +552,8 @@ class NeRVLightningModule(LightningModule):
 
         tran_loss = self.l1loss(estalp_ct, recalp_ct) \
                   + self.l1loss(estalp_xr, recalp_xr) \
-                  + 0.01*self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
-                  + 0.01*self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) 
+                  + self.weight * self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
+                  + self.weight * self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) 
                 # + self.l1loss(estalp_np, recalp_np) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
@@ -648,6 +649,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
     parser.add_argument("--scaler", type=float, default=10.0, help="XRay amplification")
     parser.add_argument("--factor", type=float, default=64.0, help="XRay transparency")
+    parser.add_argument("--weight", type=float, default=0.01, help="Regularization")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
