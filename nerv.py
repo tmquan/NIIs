@@ -329,19 +329,19 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(32, 64, 128, 256, 512, 1024),
-                strides=(2, 2, 2, 2, 2),
+                channels=(32, 32, 64, 128, 256),
+                strides=(2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                mode="pixelshuffle",
                 # dropout=0.5,
-                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=3,
@@ -355,19 +355,19 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.clarity_net = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=2,
                 in_channels=16, #self.shape,
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 2048),
-                strides=(2, 2, 2, 2, 2),
+                channels=(32, 32, 64, 128, 256),
+                strides=(2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                mode="pixelshuffle",
                 # dropout=0.5,
-                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=2,
@@ -383,19 +383,19 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.density_net = nn.Sequential(
-            UNet(
+            CustomUNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(32, 64, 128, 256, 512, 1024),
-                strides=(2, 2, 2, 2, 2),
+                channels=(32, 32, 64, 128, 256),
+                strides=(2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                mode="pixelshuffle",
                 # dropout=0.5,
-                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=3,
@@ -413,8 +413,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("ReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
@@ -552,8 +552,8 @@ class NeRVLightningModule(LightningModule):
 
         tran_loss = self.l1loss(estalp_ct, recalp_ct) \
                   + self.l1loss(estalp_xr, recalp_xr) \
-                  + self.weight * self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
-                  + self.weight * self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) 
+                # + self.weight * self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
+                # + self.weight * self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) 
                 # + self.l1loss(estalp_np, recalp_np) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
