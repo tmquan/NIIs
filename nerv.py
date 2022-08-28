@@ -329,19 +329,19 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(32, 32, 64, 128, 256),
-                strides=(2, 2, 2, 2),
+                channels=(32, 64, 128, 256, 512, 1024),
+                strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                mode="pixelshuffle",
                 # dropout=0.5,
+                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=3,
@@ -355,19 +355,19 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.clarity_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=2,
                 in_channels=16, #self.shape,
                 out_channels=self.shape,
-                channels=(32, 32, 64, 128, 256),
-                strides=(2, 2, 2, 2),
+                channels=(64, 128, 256, 512, 1024, 2048),
+                strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                mode="pixelshuffle",
                 # dropout=0.5,
+                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=2,
@@ -383,19 +383,19 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.density_net = nn.Sequential(
-            CustomUNet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(32, 32, 64, 128, 256),
-                strides=(2, 2, 2, 2),
+                channels=(32, 64, 128, 256, 512, 1024),
+                strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                mode="pixelshuffle",
                 # dropout=0.5,
+                # mode="nontrainable",
             ), 
             # SwinUNETR(
             #     spatial_dims=3,
@@ -414,7 +414,7 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("ReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
