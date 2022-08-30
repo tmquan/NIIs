@@ -301,7 +301,6 @@ class NeRVLightningModule(LightningModule):
         self.shape = hparams.shape
         self.factor = hparams.factor
         self.scaler = hparams.scaler
-        self.weight = hparams.weight
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
         self.save_hyperparameters()
@@ -338,8 +337,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -364,8 +363,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -392,8 +391,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -413,8 +412,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
@@ -509,15 +508,16 @@ class NeRVLightningModule(LightningModule):
         #         orgimg_xr = torch.rand_like(orgimg_xr)
 
         if stage=='train':
-            if (batch_idx % 3) == 1:
-                orgvol_ct = torch.rand_like(orgvol_ct)
-            elif (batch_idx % 3) == 2:
-                # Calculate interpolation
-                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-                vol3d = orgvol_ct.detach().clone()
-                noise = torch.rand_like(vol3d)
-                alpha = alpha.expand_as(vol3d)
-                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+            with torch.no_grad():
+                if (batch_idx % 3) == 1:
+                    orgvol_ct = torch.rand_like(orgvol_ct)
+                elif (batch_idx % 3) == 2:
+                    # Calculate interpolation
+                    alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                    vol3d = orgvol_ct.detach().clone()
+                    noise = torch.rand_like(vol3d)
+                    alpha = alpha.expand_as(vol3d)
+                    orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -552,8 +552,6 @@ class NeRVLightningModule(LightningModule):
 
         tran_loss = self.l1loss(estalp_ct, recalp_ct) \
                   + self.l1loss(estalp_xr, recalp_xr) \
-                # + self.weight * self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
-                # + self.weight * self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) 
                 # + self.l1loss(estalp_np, recalp_np) \
 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
@@ -647,9 +645,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_samples", type=int, default=1000, help="training samples")
     parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
-    parser.add_argument("--scaler", type=float, default=10.0, help="XRay amplification")
+    parser.add_argument("--scaler", type=float, default=20.0, help="XRay amplification")
     parser.add_argument("--factor", type=float, default=64.0, help="XRay transparency")
-    parser.add_argument("--weight", type=float, default=0.01, help="Regularization")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
