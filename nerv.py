@@ -337,8 +337,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("PReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -363,8 +363,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("PReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -391,8 +391,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("PReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -413,7 +413,7 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
@@ -468,8 +468,9 @@ class NeRVLightningModule(LightningModule):
         return pictures, densities
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
-        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape)
-        pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
+        with torch.no_grad():
+            zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape)
+            pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
         cat_features = torch.cat([image2d, 
                                   pos_encoding.to(image2d.device),
                                   frustum_feat.view(frustum_feat.shape[0], 
@@ -487,7 +488,8 @@ class NeRVLightningModule(LightningModule):
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
-        orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
+        with torch.no_grad():
+            orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
         # if stage=='train':
         #     if (batch_idx % 4) == 1:
@@ -552,8 +554,10 @@ class NeRVLightningModule(LightningModule):
 
         tran_loss = self.l1loss(estalp_ct, recalp_ct) \
                   + self.l1loss(estalp_xr, recalp_xr) \
+                  + self.l1loss(recalp_ct, torch.rand_like(recalp_ct)) \
+                  + self.l1loss(recalp_xr, torch.rand_like(recalp_xr)) \
                 # + self.l1loss(estalp_np, recalp_np) \
-
+                
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) \
                 # + self.l1loss(estimg_np, recimg_np) \
