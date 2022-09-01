@@ -454,7 +454,7 @@ class NeRVLightningModule(LightningModule):
 
         features = image3d.repeat(1, 3, 1, 1, 1)
         # features = radiances[:,[0]].repeat(1, 3, 1, 1, 1)
-        densities = radiances[:,[1]]
+        # densities = radiances[:,[1]]
         # with torch.no_grad():
         frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
@@ -463,11 +463,11 @@ class NeRVLightningModule(LightningModule):
                             cam_ft=frustum_feat*2. - 1.).to(image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = densities / factor,
+            densities = radiances[:,[1]] / factor,
             voxel_size = 3.2 / self.shape,
         )
                 
-        pictures, raypoint = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type, scaler=scaler)
+        pictures, _ = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type, scaler=scaler)
         return pictures, radiances
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
