@@ -333,11 +333,11 @@ class NeRVLightningModule(LightningModule):
                 out_channels=2, 
                 channels=(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("ReLU", {"inplace": True}),
-                # norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -359,7 +359,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
                 # act=("ReLU", {"inplace": True}),
@@ -387,7 +387,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(48, 96, 192, 384, 768, 1024),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
                 # act=("ReLU", {"inplace": True}),
@@ -493,24 +493,6 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
-        # if stage=='train':
-        #     if (batch_idx % 4) == 1:
-        #         # # Calculate interpolation
-        #         # alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-        #         # vol3d = orgvol_ct.detach().clone()
-        #         # noise = torch.rand_like(vol3d)
-        #         # alpha = alpha.expand_as(vol3d)
-        #         # orgvol_ct = alpha * vol3d + (1 - alpha) * noise
-        #         orgvol_ct = torch.rand_like(orgvol_ct)
-        #     elif (batch_idx % 4) == 2:
-        #         # # Calculate interpolation
-        #         # gamma = torch.rand(self.batch_size, 1, 1, 1, device=_device)
-        #         # img2d = orgimg_xr.detach().clone()
-        #         # noise = torch.rand_like(img2d)
-        #         # gamma = gamma.expand_as(img2d)
-        #         # orgimg_xr = gamma * img2d + (1 - gamma) * noise
-        #         orgimg_xr = torch.rand_like(orgimg_xr)
-
         # with torch.no_grad():
         if stage=='train':
             if (batch_idx % 3) == 1:
@@ -538,70 +520,7 @@ class NeRVLightningModule(LightningModule):
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
         recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
         
-        # # Noise path 
-        # orgvol_np = torch.rand_like(orgvol_ct)
-        # orgcam_np = torch.rand(self.batch_size, 5, device=_device)
-        # estimg_np, estrad_np = self.forward_picture(orgvol_np, orgcam_np, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
-        # estcam_np = self.forward_frustum(estimg_np)
-        # estmid_np, estvol_np = self.forward_density(estimg_np, estcam_np)
-        # recimg_np, recrad_np = self.forward_picture(estvol_np, estcam_np, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
-        
-        # Loss
-        im3d_loss = self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(estvol_xr, recmid_xr) \
-                  + self.l1loss(estvol_xr, recvol_xr) 
-
-                #   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                #   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                #   + self.l1loss(estvol_xr, recmid_xr) \
-                #   + self.l1loss(estvol_xr, recvol_xr) \
-                #   + self.l1loss(orgvol_np, estmid_np) \
-                #   + self.l1loss(orgvol_np, estvol_np) 
-
-        tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-                  + self.l1loss(estrad_xr, recrad_xr) \
-                  + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) 
-
-                # + self.l1loss(estrad_np, recrad_np)
-                # + self.l1loss(recrad_ct, torch.rand_like(recrad_ct)) \
-                # + self.l1loss(recrad_xr, torch.rand_like(recrad_xr)) \
-                # + self.l1loss(estrad_np, recrad_np) \
-                
-        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-                  + self.l1loss(orgimg_xr, estimg_xr) 
-
-                # + self.l1loss(estimg_np, recimg_np) \
-                # + self.l1loss(orgimg_xr, recimg_xr) \
-                    
-        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(orgcam_xr, reccam_xr) 
-
-                # + self.l1loss(orgcam_np, estcam_np) 
-
-        # if optimizer_idx==0: # forward picture
-        #     info = {f'loss': 1e0*im2d_loss + 1e0*tran_loss} 
-        # if optimizer_idx==1: # forward density
-        #     info = {f'loss': 1e0*im3d_loss}
-        # if optimizer_idx==2: # forward density
-        #     info = {f'loss': 1e0*cams_loss}
-        # else:    
-        #     info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
-        
-        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-
         if batch_idx == 0:
-            # if self.devices==1:
-            # viz3d = torch.cat([torch.cat([orgvol_ct, estvol_ct, estvol_xr], dim=-2), 
-            #                    torch.cat([estrad_ct, estrad_xr, recrad_ct], dim=-2)], dim=-3)
-            # plot_2d_or_3d_image(data=viz3d, 
-            #                     tag=f'{stage}_gif', writer=tensorboard, step=self.current_epoch, frame_dim=-1)
-        
             viz2d = torch.cat([
                         torch.cat([orgvol_ct[...,self.shape//2], 
                                    estimg_ct,
@@ -616,6 +535,31 @@ class NeRVLightningModule(LightningModule):
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
+        
+        # Loss
+        im3d_loss = self.l1loss(orgvol_ct, estmid_ct) \
+                  + self.l1loss(orgvol_ct, estvol_ct) \
+                  + self.l1loss(estvol_xr, recmid_xr) \
+                  + self.l1loss(estvol_xr, recvol_xr) 
+
+        tran_loss = self.l1loss(estrad_ct, recrad_ct) \
+                  + self.l1loss(estrad_xr, recrad_xr) \
+                  + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) 
+                
+        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
+                  + self.l1loss(orgimg_xr, estimg_xr) 
+                    
+        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
+                  + self.l1loss(orgcam_xr, reccam_xr) 
+
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss + 1e0*tran_loss} 
+        
+        self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+
         return info
 
     def training_step(self, batch, batch_idx, optimizer_idx=None):
