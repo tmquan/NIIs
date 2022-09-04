@@ -349,7 +349,7 @@ class NeRVLightningModule(LightningModule):
             #     img_size=(32, 32, 32), 
             #     feature_size=48,
             # ),
-            nn.Sigmoid(),  
+            nn.Tanh(),  
         )
 
         self.clarity_net = nn.Sequential(
@@ -362,8 +362,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("ReLU", {"inplace": True}),
-                # norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -377,7 +377,7 @@ class NeRVLightningModule(LightningModule):
             # ),
             Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid(), 
+            nn.Tanh(), 
         )
 
         self.density_net = nn.Sequential(
@@ -390,20 +390,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("ReLU", {"inplace": True}),
-                # norm=Norm.INSTANCE,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=(32, 32, 32), 
-            #     feature_size=48,
-            # ),
-            nn.Sigmoid(),  
+            nn.Tanh(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -411,25 +403,12 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                act=("ReLU", {"inplace": True}),
+                norm=Norm.INSTANCE,
                 # dropout_prob=0.5,
-                pretrained=True, 
+                # pretrained=True, 
             ),
-            # ViT(
-            #     img_size=(self.shape, self.shape), 
-            #     patch_size=(16, 16),
-            #     spatial_dims=2,
-            #     in_channels=1,
-            #     num_classes=5,
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     hidden_size=768,
-            #     mlp_dim=3072,
-            #     num_layers=12,
-            #     num_heads=12,
-            # ),
-            nn.Sigmoid(),
+            nn.Tanh(),
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -445,9 +424,9 @@ class NeRVLightningModule(LightningModule):
     ) -> torch.Tensor:
         # features = image3d.repeat(1, 3, 1, 1, 1)
         if opacities=='stochastic':
-            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
+            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
+            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5
         elif opacities=='constant':
             radiances = torch.ones_like(image3d)
 
@@ -478,12 +457,12 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        clarity = self.clarity_net(cat_features) # * 2. - 1.) * .5 + .5
-        density = self.density_net(clarity) # * 2. - 1.) * .5 + .5
+        clarity = self.clarity_net(cat_features * 2. - 1.) * .5 + .5
+        density = self.density_net(clarity * 2. - 1.) * .5 + .5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -494,16 +473,16 @@ class NeRVLightningModule(LightningModule):
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
         # with torch.no_grad():
-        # if stage=='train':
-        #     if (batch_idx % 3) == 1:
-        #         orgvol_ct = torch.rand_like(orgvol_ct)
-        #     elif (batch_idx % 3) == 2:
-        #         # Calculate interpolation
-        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-        #         vol3d = orgvol_ct.detach().clone()
-        #         noise = torch.rand_like(vol3d)
-        #         alpha = alpha.expand_as(vol3d)
-        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        if stage=='train':
+            if (batch_idx % 3) == 1:
+                orgvol_ct = torch.rand_like(orgvol_ct)
+            elif (batch_idx % 3) == 2:
+                # Calculate interpolation
+                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                vol3d = orgvol_ct.detach().clone()
+                noise = torch.rand_like(vol3d)
+                alpha = alpha.expand_as(vol3d)
+                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -644,7 +623,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        # accumulate_grad_batches=3, 
+        accumulate_grad_batches=3, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
