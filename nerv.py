@@ -567,7 +567,10 @@ class NeRVLightningModule(LightningModule):
         # return info
         # train generator
         if optimizer_idx == 0:
-            g_loss = self.gen_step(fake_images=estimg_ct, real_images=orgimg_xr)
+            g_loss = self.gen_step(
+                fake_images=torch.cat([estimg_ct, recimg_ct, recimg_xr], dim=0),
+                real_images=orgimg_xr
+            )
             self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss
                            + g_loss} 
@@ -575,7 +578,9 @@ class NeRVLightningModule(LightningModule):
 
         # train discriminator
         elif optimizer_idx == 1:
-            d_loss = self.discrim_step(fake_images=estimg_ct, real_images=orgimg_xr)
+            d_loss = self.discrim_step(
+                fake_images=torch.cat([estimg_ct, recimg_ct, recimg_xr], dim=0),
+                real_images=orgimg_xr)
             d_grad = self.compute_gradient_penalty(fake_samples=estimg_ct, real_samples=orgimg_xr)
             self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': d_loss+10*d_grad} 
