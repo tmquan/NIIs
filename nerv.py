@@ -307,7 +307,7 @@ class NeRVLightningModule(LightningModule):
         raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 320, #self.shape,
+            n_pts_per_ray = 512, #self.shape,
             min_depth = 0.001,
             max_depth = 4.5,
         )
@@ -498,16 +498,16 @@ class NeRVLightningModule(LightningModule):
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
         # with torch.no_grad():
-        if stage=='train':
-            if (batch_idx % 3) == 1:
-                orgvol_ct = torch.rand_like(orgvol_ct)
-            elif (batch_idx % 3) == 2:
-                # Calculate interpolation
-                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-                vol3d = orgvol_ct.detach().clone()
-                noise = torch.rand_like(vol3d)
-                alpha = alpha.expand_as(vol3d)
-                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        # if stage=='train':
+        #     if (batch_idx % 3) == 1:
+        #         orgvol_ct = torch.rand_like(orgvol_ct)
+        #     elif (batch_idx % 3) == 2:
+        #         # Calculate interpolation
+        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+        #         vol3d = orgvol_ct.detach().clone()
+        #         noise = torch.rand_like(vol3d)
+        #         alpha = alpha.expand_as(vol3d)
+        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -568,7 +568,7 @@ class NeRVLightningModule(LightningModule):
         # train generator
         if optimizer_idx == 0:
             g_loss = self.gen_step(fake_images=estimg_ct, real_images=orgimg_xr)
-            self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=True, logger=True)
+            self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss
                            + g_loss} 
             return info
@@ -577,7 +577,7 @@ class NeRVLightningModule(LightningModule):
         elif optimizer_idx == 1:
             d_loss = self.discrim_step(fake_images=estimg_ct, real_images=orgimg_xr)
             d_grad = self.compute_gradient_penalty(fake_samples=estimg_ct, real_samples=orgimg_xr)
-            self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=True, logger=True)
+            self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': d_loss+10*d_grad} 
             return info
 
