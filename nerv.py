@@ -411,17 +411,17 @@ class NeRVLightningModule(LightningModule):
             nn.Tanh(),
         )
 
-        self.discriminator = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=1,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
-                # dropout_prob=0.5,
-                # pretrained=True, 
-            ),
-        )
+        # self.discriminator = nn.Sequential(
+        #     DenseNet201(
+        #         spatial_dims=2,
+        #         in_channels=1,
+        #         out_channels=1,
+        #         act=("ReLU", {"inplace": True}),
+        #         norm=Norm.INSTANCE,
+        #         # dropout_prob=0.5,
+        #         # pretrained=True, 
+        #     ),
+        # )
 
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -497,17 +497,16 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
-        # with torch.no_grad():
-        # if stage=='train':
-        #     if (batch_idx % 3) == 1:
-        #         orgvol_ct = torch.rand_like(orgvol_ct)
-        #     elif (batch_idx % 3) == 2:
-        #         # Calculate interpolation
-        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-        #         vol3d = orgvol_ct.detach().clone()
-        #         noise = torch.rand_like(vol3d)
-        #         alpha = alpha.expand_as(vol3d)
-        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        if stage=='train':
+            if (batch_idx % 3) == 1:
+                orgvol_ct = torch.rand_like(orgvol_ct)
+            elif (batch_idx % 3) == 2:
+                # Calculate interpolation
+                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                vol3d = orgvol_ct.detach().clone()
+                noise = torch.rand_like(vol3d)
+                alpha = alpha.expand_as(vol3d)
+                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -557,34 +556,35 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
 
-        # info = {f'loss': 1e2*im3d_loss + 1e2*tran_loss + 1e2*im2d_loss + 1e2*cams_loss} 
+        info = {f'loss': 1e1*im3d_loss + 1e1*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         
-        # return info
+        return info
+        
         # train generator
-        if optimizer_idx == 0:
-            g_loss = self.gen_step(
-                fake_images=torch.cat([estimg_ct, recimg_ct, recimg_xr], dim=0),
-                real_images=orgimg_xr
-            )
-            self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
-            info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss
-                           + g_loss} 
-            return info
+        # if optimizer_idx == 0:
+        #     g_loss = self.gen_step(
+        #         fake_images=torch.cat([estimg_ct, recimg_ct, estimg_xr, recimg_xr], dim=0),
+        #         real_images=orgimg_xr
+        #     )
+        #     self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
+        #     info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss
+        #                    + g_loss} 
+        #     return info
 
-        # train discriminator
-        elif optimizer_idx == 1:
-            d_loss = self.discrim_step(
-                fake_images=torch.cat([estimg_ct, recimg_ct, recimg_xr], dim=0),
-                real_images=orgimg_xr)
-            d_grad = self.compute_gradient_penalty(fake_samples=estimg_ct, real_samples=orgimg_xr)
-            self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
-            info = {f'loss': d_loss+10*d_grad} 
-            return info
+        # # train discriminator
+        # elif optimizer_idx == 1:
+        #     d_loss = self.discrim_step(
+        #         fake_images=torch.cat([estimg_ct, recimg_ct, estimg_xr, recimg_xr], dim=0),
+        #         real_images=orgimg_xr)
+        #     d_grad = self.compute_gradient_penalty(fake_samples=estimg_ct, real_samples=orgimg_xr)
+        #     self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
+        #     info = {f'loss': d_loss+10*d_grad} 
+        #     return info
 
     def compute_gradient_penalty(self, fake_samples, real_samples):
         """Calculates the gradient penalty loss for WGAN GP"""
@@ -609,7 +609,6 @@ class NeRVLightningModule(LightningModule):
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
-
     def training_step(self, batch, batch_idx, optimizer_idx):
         return self._common_step(batch, batch_idx, optimizer_idx=optimizer_idx, stage='train')
 
@@ -633,17 +632,17 @@ class NeRVLightningModule(LightningModule):
         return self._common_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_g = torch.optim.RAdam([
-            {'params': self.opacity_net.parameters()}, 
-            {'params': self.clarity_net.parameters()}, 
-            {'params': self.density_net.parameters()}, 
-            {'params': self.frustum_net.parameters()}, 
-        ], lr=1e0*(self.lr or self.learning_rate))
-        opt_d = torch.optim.RAdam([
-            {'params': self.discriminator.parameters()}
-        ], lr=1e0*(self.lr or self.learning_rate))
-        return opt_g, opt_d
-        # return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        # opt_g = torch.optim.RAdam([
+        #     {'params': self.opacity_net.parameters()}, 
+        #     {'params': self.clarity_net.parameters()}, 
+        #     {'params': self.density_net.parameters()}, 
+        #     {'params': self.frustum_net.parameters()}, 
+        # ], lr=1e0*(self.lr or self.learning_rate))
+        # opt_d = torch.optim.RAdam([
+        #     {'params': self.discriminator.parameters()}
+        # ], lr=1e0*(self.lr or self.learning_rate))
+        # return opt_g, opt_d
+        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         # return torch.optim.RAdam([
         #         {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
@@ -702,7 +701,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        # accumulate_grad_batches=3, 
+        accumulate_grad_batches=3, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
