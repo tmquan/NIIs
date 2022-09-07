@@ -609,8 +609,8 @@ class NeRVLightningModule(LightningModule):
         gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        return self._common_step(batch, batch_idx, optimizer_idx=optimizer_idx, stage='train')
+    def training_step(self, batch, batch_idx):
+        return self._common_step(batch, batch_idx, optimizer_idx=0, stage='train')
 
     def validation_step(self, batch, batch_idx):
         return self._common_step(batch, batch_idx, optimizer_idx=0, stage='validation')
@@ -642,7 +642,6 @@ class NeRVLightningModule(LightningModule):
         #     {'params': self.discriminator.parameters()}
         # ], lr=1e0*(self.lr or self.learning_rate))
         # return opt_g, opt_d
-        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
         # return torch.optim.RAdam([
         #         {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
@@ -650,6 +649,7 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
                         
 if __name__ == "__main__":
     parser = ArgumentParser()
