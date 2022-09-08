@@ -556,7 +556,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
 
-        info = {f'loss': 1e1*im3d_loss + 1e1*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        info = {f'loss': 1e2*im3d_loss + 1e2*tran_loss + 1e2*im2d_loss + 1e2*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
