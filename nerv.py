@@ -341,15 +341,7 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=(32, 32, 32), 
-            #     feature_size=48,
-            # ),
-            nn.Tanh(),  
+            nn.Sigmoid(), 
         )
 
         self.clarity_net = nn.Sequential(
@@ -367,17 +359,8 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            # SwinUNETR(
-            #     spatial_dims=2,
-            #     in_channels=16,
-            #     out_channels=self.shape, # value and alpha
-            #     use_checkpoint=True, 
-            #     img_size=(64, 64), 
-            #     feature_size=48
-            # ),
-            Flatten(),
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh(), 
+            nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -395,7 +378,7 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
-            nn.Tanh(),  
+            nn.Sigmoid(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -408,20 +391,8 @@ class NeRVLightningModule(LightningModule):
                 # dropout_prob=0.5,
                 # pretrained=True, 
             ),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
-
-        # self.discriminator = nn.Sequential(
-        #     DenseNet201(
-        #         spatial_dims=2,
-        #         in_channels=1,
-        #         out_channels=1,
-        #         act=("ReLU", {"inplace": True}),
-        #         norm=Norm.INSTANCE,
-        #         # dropout_prob=0.5,
-        #         # pretrained=True, 
-        #     ),
-        # )
 
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -437,9 +408,9 @@ class NeRVLightningModule(LightningModule):
     ) -> torch.Tensor:
         # features = image3d.repeat(1, 3, 1, 1, 1)
         if opacities=='stochastic':
-            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
+            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
-            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5
+            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
         elif opacities=='constant':
             radiances = torch.ones_like(image3d)
 
@@ -470,25 +441,13 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-        clarity = self.clarity_net(cat_features * 2. - 1.) * .5 + .5
-        density = self.density_net(clarity * 2. - 1.) * .5 + .5
+        clarity = self.clarity_net(cat_features) # * 2. - 1.) * .5 + .5
+        density = self.density_net(clarity) # * 2. - 1.) * .5 + .5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
-
-    def discrim_step(self, fake_images: torch.Tensor, real_images: torch.Tensor):
-        real_logits = self.discriminator(real_images) 
-        fake_logits = self.discriminator(fake_images) 
-        real_loss = F.softplus(-real_logits).mean() 
-        fake_loss = F.softplus(+fake_logits).mean()
-        return real_loss + fake_loss 
-
-    def gen_step(self, fake_images: torch.Tensor, real_images: torch.Tensor):
-        fake_logits = self.discriminator(fake_images) 
-        fake_loss = F.softplus(-fake_logits).mean()
-        return fake_loss 
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
@@ -532,23 +491,23 @@ class NeRVLightningModule(LightningModule):
                                    recimg_ct, 
                                    estimg_xr], dim=-1),
                         torch.cat([estrad_ct[:, [1], ..., self.shape//2],
-                                   estrad_xr[:, [1], ..., self.shape//2],
-                                   recrad_ct[:, [1], ..., self.shape//2]], dim=-1),
+                                   recrad_ct[:, [1], ..., self.shape//2],
+                                   estrad_xr[:, [1], ..., self.shape//2]], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         
         # Loss
-        im3d_loss = self.l1loss(orgvol_ct, estmid_ct) \
-                  + self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(estvol_xr, recmid_xr) \
+        im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
                   + self.l1loss(estvol_xr, recvol_xr) 
 
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) 
+                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
+                  + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
+                  + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
                 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
@@ -556,7 +515,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
 
-        info = {f'loss': 1e1*im3d_loss + 1e1*tran_loss + 1e1*im2d_loss + 1e1*cams_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -586,28 +545,40 @@ class NeRVLightningModule(LightningModule):
         #     info = {f'loss': d_loss+10*d_grad} 
         #     return info
 
-    def compute_gradient_penalty(self, fake_samples, real_samples):
-        """Calculates the gradient penalty loss for WGAN GP"""
-        # Random weight term for interpolation between real and fake samples
-        alpha = torch.Tensor(np.random.random((real_samples.size(0), 1, 1, 1))).to(self.device)
-        # Get random interpolation between real and fake samples
-        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
-        interpolates = interpolates.to(self.device)
-        d_interpolates = self.discriminator(interpolates)
-        # fake = torch.Tensor(real_samples.shape[0], 1).fill_(1.0).to(self.device)
-        fake = torch.ones_like(d_interpolates)
-        # Get gradient w.r.t. interpolates
-        gradients = torch.autograd.grad(
-            outputs=d_interpolates,
-            inputs=interpolates,
-            grad_outputs=fake,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        gradients = gradients.view(gradients.size(0), -1).to(self.device)
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
-        return gradient_penalty
+    # def discrim_step(self, fake_images: torch.Tensor, real_images: torch.Tensor):
+    #     real_logits = self.discriminator(real_images) 
+    #     fake_logits = self.discriminator(fake_images) 
+    #     real_loss = F.softplus(-real_logits).mean() 
+    #     fake_loss = F.softplus(+fake_logits).mean()
+    #     return real_loss + fake_loss 
+
+    # def gen_step(self, fake_images: torch.Tensor, real_images: torch.Tensor):
+    #     fake_logits = self.discriminator(fake_images) 
+    #     fake_loss = F.softplus(-fake_logits).mean()
+    #     return fake_loss 
+
+    # def compute_gradient_penalty(self, fake_samples, real_samples):
+    #     """Calculates the gradient penalty loss for WGAN GP"""
+    #     # Random weight term for interpolation between real and fake samples
+    #     alpha = torch.Tensor(np.random.random((real_samples.size(0), 1, 1, 1))).to(self.device)
+    #     # Get random interpolation between real and fake samples
+    #     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+    #     interpolates = interpolates.to(self.device)
+    #     d_interpolates = self.discriminator(interpolates)
+    #     # fake = torch.Tensor(real_samples.shape[0], 1).fill_(1.0).to(self.device)
+    #     fake = torch.ones_like(d_interpolates)
+    #     # Get gradient w.r.t. interpolates
+    #     gradients = torch.autograd.grad(
+    #         outputs=d_interpolates,
+    #         inputs=interpolates,
+    #         grad_outputs=fake,
+    #         create_graph=True,
+    #         retain_graph=True,
+    #         only_inputs=True,
+    #     )[0]
+    #     gradients = gradients.view(gradients.size(0), -1).to(self.device)
+    #     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    #     return gradient_penalty
 
     def training_step(self, batch, batch_idx):
         return self._common_step(batch, batch_idx, optimizer_idx=0, stage='train')
@@ -701,7 +672,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        accumulate_grad_batches=3, 
+        # accumulate_grad_batches=3, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
