@@ -500,7 +500,9 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(estvol_xr, recvol_xr) 
+                  + self.l1loss(orgvol_ct, estmid_ct) \
+                  + self.l1loss(estvol_xr, recvol_xr) \
+                  + self.l1loss(estvol_xr, recmid_xr) 
 
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
                   + self.l1loss(estrad_xr, recrad_xr) \
