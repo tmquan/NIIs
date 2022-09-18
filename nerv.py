@@ -2,7 +2,6 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 from argparse import ArgumentParser
-
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
@@ -620,8 +619,12 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        return torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-                        
+        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
+        sch = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, 
+            T_0=10, T_mult=2, eta_min=0.001
+        )
+        return [opt], [sch]
+           
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--conda_env", type=str, default="NeRV")
