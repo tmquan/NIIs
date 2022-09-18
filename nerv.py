@@ -388,7 +388,7 @@ class NeRVLightningModule(LightningModule):
                 act=("ReLU", {"inplace": True}),
                 norm=Norm.INSTANCE,
                 # dropout_prob=0.5,
-                # pretrained=True, 
+                pretrained=True, 
             ),
             nn.Sigmoid(),
         )
