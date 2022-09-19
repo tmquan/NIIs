@@ -299,6 +299,7 @@ class NeRVLightningModule(LightningModule):
         self.shape = hparams.shape
         self.factor = hparams.factor
         self.scaler = hparams.scaler
+        self.weight_decay = hparams.weight_decay
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
         self.save_hyperparameters()
@@ -619,9 +620,9 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=10, eta_min=self.hparams.lr / 10
+            optimizer, T_max=10, eta_min=self.lr / 10
         )
         return [optimizer], [scheduler]
            
