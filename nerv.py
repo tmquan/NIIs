@@ -336,8 +336,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -354,8 +354,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -373,8 +373,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -386,8 +386,8 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1,
                 out_channels=5,
-                act=("ReLU", {"inplace": True}),
-                norm=Norm.INSTANCE,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
@@ -506,8 +506,8 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
                   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                  + self.l1loss(torch.rand_like(orgvol_ct), estrad_ct[:,[1]]) \
-                  + self.l1loss(torch.rand_like(estvol_xr), estrad_xr[:,[1]]) 
+                  + self.l1loss(torch.one_like(orgvol_ct), estrad_ct[:,[1]]) \
+                  + self.l1loss(torch.one_like(estvol_xr), estrad_xr[:,[1]]) 
                 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
@@ -620,12 +620,13 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=10, eta_min=self.lr / 10
-        )
-        return [optimizer], [scheduler]
-           
+        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     optimizer, T_max=10, eta_min=self.lr / 10
+        # )
+        # return [optimizer], [scheduler]
+        return torch.optim.RAdam(self.parameters(), lr=self.lr)
+        
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--conda_env", type=str, default="NeRV")
@@ -677,7 +678,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        # accumulate_grad_batches=3, 
+        accumulate_grad_batches=4, 
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
