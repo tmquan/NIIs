@@ -688,7 +688,7 @@ if __name__ == "__main__":
         # gradient_clip_val=5, 
         # gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
-        # detect_anomaly=True, 
+        detect_anomaly=True, 
         # profiler="simple",
     )
 
