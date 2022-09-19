@@ -619,11 +619,11 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        opt = torch.optim.RAdam(self.parameters(), lr=1e0*(self.lr or self.learning_rate))
-        sch = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, 
-            T_0=10, T_mult=2, eta_min=0.001
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=10, eta_min=self.hparams.lr / 10
         )
-        return [opt], [sch]
+        return [optimizer], [scheduler]
            
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -637,6 +637,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_samples", type=int, default=1000, help="training samples")
     parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--scaler", type=float, default=20.0, help="XRay amplification")
     parser.add_argument("--factor", type=float, default=64.0, help="XRay transparency")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
