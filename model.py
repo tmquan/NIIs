@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from torch.optim import Adam
 import torchvision
-
+import math
 from argparse import ArgumentParser
 
 import typing
@@ -19,6 +19,8 @@ from monai.utils import InterpolateMode, deprecated_arg
 
 from pytorch3d.common.compat import meshgrid_ij
 from pytorch3d.structures import Volumes
+from pytorch3d.ops.utils import eyes
+from pytorch3d.transforms import Transform3d
 from pytorch3d.renderer.cameras import (
     CamerasBase,
     FoVOrthographicCameras,
@@ -39,6 +41,7 @@ from pytorch3d.renderer import (
     ray_bundle_to_ray_points, 
     RayBundle, 
     VolumeRenderer, 
+    VolumeSampler, 
     GridRaysampler, 
     NDCMultinomialRaysampler, NDCGridRaysampler, MonteCarloRaysampler, 
     EmissionAbsorptionRaymarcher, AbsorptionOnlyRaymarcher, 
@@ -52,6 +55,11 @@ from pytorch3d.renderer.implicit.raymarching import (
 
 from pytorch3d.renderer.implicit.raysampling import (
     _xy_to_ray_bundle
+)
+
+from pytorch3d.renderer.implicit.utils import (
+    _validate_ray_bundle_variables, 
+    ray_bundle_variables_to_ray_points
 )
 
 from pytorch3d.transforms import (
@@ -105,8 +113,36 @@ def init_random_cameras(
 
     R, T = look_at_view_transform(dist.float(), elev.float(), azim.float(), degrees=True, device=device)
     
-    R = R.to(cam_ft.dtype)
-    T = T.to(cam_ft.dtype)
+    # R = R.to(cam_ft.dtype)
+    # T = T.to(cam_ft.dtype)
+    # camera_position = camera_position_from_spherical_angles(
+    #     dist.float(), 
+    #     elev.float(), 
+    #     azim.float(), 
+    #     degrees=True, 
+    #     device=device
+    # )
+    # dist, elev, azim = broadcasted_args
+    
+    # degrees=True
+    # if degrees:
+    #     elev = math.pi / 180.0 * elev
+    #     azim = math.pi / 180.0 * azim
+    # x = dist * torch.cos(elev) * torch.sin(azim)
+    # y = dist * torch.sin(elev)
+    # z = dist * torch.cos(elev) * torch.cos(azim)
+    # camera_position = torch.stack([x, y, z], dim=1).float().to(device)
+    # if camera_position.dim() == 0:
+    #     camera_position = camera_position.view(1, -1)  # add batch dim.
+    # # print(cam_ft.shape)
+    # # print(dist.shape, elev.shape, azim.shape)
+    # # print(x.shape, y.shape, y.shape)
+    # # print(camera_position.shape)
+    # R = look_at_rotation(camera_position, device=device)  # (1, 3, 3)
+    # T = -torch.bmm(R.transpose(1, 2), camera_position.view(1, 3, -1))[:, :, 0]   # (1, 3)
+
+    R = R.float()
+    T = T.float()
     cam_params = {"R": R, "T": T}
     if cam_type in (OpenGLPerspectiveCameras, OpenGLOrthographicCameras):
         cam_params["znear"] = torch.rand(batch_size) * 10 + 0.1
@@ -151,33 +187,6 @@ def init_random_cameras(
     else:
         raise ValueError(str(cam_type))
     return cam_type(**cam_params)
-
-class VolumeModel(nn.Module):
-    def __init__(self, renderer):
-        super().__init__()
-        # # After evaluating torch.sigmoid(self.log_colors), we get 
-        # # densities close to zero.
-        # self.log_densities = nn.Parameter(-4.0 * torch.ones(1, *volume_shape))
-        # # After evaluating torch.sigmoid(self.log_colors), we get 
-        # # a neutral gray color everywhere.
-        # self.log_colors = nn.Parameter(torch.zeros(3, *volume_shape))
-
-        # self._voxel_size = voxel_size
-        # Store the renderer module as well.
-        self._renderer = renderer
-        
-    def forward(self, cameras, volumes, norm_type="standardized"):
-        screen_RGBA, _ = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
-        # print(screen_RGBA)
-        screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
-        screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
-        normalized = lambda x: (x - x.min())/(x.max() - x.min())
-        standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
-        if norm_type == "normalized":
-            screen_RGB = normalized(screen_RGB)
-        elif norm_type == "standardized":
-            screen_RGB = normalized(standardized(screen_RGB))
-        return screen_RGB
 
 def get_emb(sin_inp):
     """
