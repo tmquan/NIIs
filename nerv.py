@@ -628,7 +628,7 @@ class NeRVLightningModule(LightningModule):
         #     optimizer, T_max=10, eta_min=self.lr / 10
         # )
         # return [optimizer], [scheduler]
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.LBFGS(self.parameters(), lr=self.lr)
         
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -685,7 +685,7 @@ if __name__ == "__main__":
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
-        # amp_level='O3', # see https://nvidia.github.io/apex/amp.html#opt-levels
+        # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
         # gradient_clip_val=5, 
