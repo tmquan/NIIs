@@ -75,23 +75,14 @@ class PictureModel(nn.Module):
         super().__init__()
         self._renderer = renderer
         
-<<<<<<< HEAD
     def forward(self, cameras, volumes, norm_type="standardized", scaler=1.0, eps=1e-8):
-=======
-    def forward(self, cameras, volumes, norm_type="standardized", scaler=1.0):
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         # rays_points = ray_bundle_to_ray_points(ray_bundles)
 
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
         screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
-<<<<<<< HEAD
         normalized = lambda x: (x - x.min() + eps)/(x.max() - x.min() + eps)
         standardized = lambda x: (x - x.mean())/(x.std() + 1e-4) # 1e-6 to avoid zero division
-=======
-        normalized = lambda x: (x - x.min())/(x.max() - x.min() + 1e-6)
-        standardized = lambda x: (x - x.mean())/(x.std() + 1e-6) # 1e-6 to avoid zero division
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         if norm_type == "normalized":
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
@@ -348,19 +339,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-<<<<<<< HEAD
-                # norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="nontrainable",
-            ), 
-            nn.Tanh(), 
-=======
                 norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid(), 
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         )
 
         self.clarity_net = nn.Sequential(
@@ -374,16 +357,12 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-<<<<<<< HEAD
-                # norm=Norm.BATCH,
-=======
                 norm=Norm.BATCH,
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Tanh(), 
+            nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -397,19 +376,11 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-<<<<<<< HEAD
-                # norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="nontrainable",
-            ), 
-            nn.Tanh(),  
-=======
                 norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
             nn.Sigmoid(),  
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         )
 
         self.frustum_net = nn.Sequential(
@@ -418,15 +389,11 @@ class NeRVLightningModule(LightningModule):
                 in_channels=1,
                 out_channels=5,
                 act=("LeakyReLU", {"inplace": True}),
-<<<<<<< HEAD
-                # norm=Norm.BATCH,
-=======
                 norm=Norm.BATCH,
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
                 # dropout_prob=0.5,
                 pretrained=True, 
             ),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
 
         self.l1loss = nn.L1Loss(reduction="mean")
@@ -443,15 +410,9 @@ class NeRVLightningModule(LightningModule):
     ) -> torch.Tensor:
         # features = image3d.repeat(1, 3, 1, 1, 1)
         if opacities=='stochastic':
-<<<<<<< HEAD
-            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
-        elif opacities=='deterministic':
-            radiances = self.opacity_net(image3d * 2. - 1.) * .5 + .5
-=======
             radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
         elif opacities=='deterministic':
             radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         elif opacities=='constant':
             radiances = torch.ones_like(image3d)
 
@@ -463,12 +424,8 @@ class NeRVLightningModule(LightningModule):
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
-<<<<<<< HEAD
                             cam_ft=frustum_feat*2. - 1.)
         frustums.to(device=image3d.device)
-=======
-                            cam_ft=frustum_feat*2. - 1.).to(image3d.device)
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         volumes = Volumes(
             features = features, 
             densities = densities / factor,
@@ -487,21 +444,12 @@ class NeRVLightningModule(LightningModule):
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
-<<<<<<< HEAD
-        clarity = self.clarity_net(cat_features * 2. - 1.) * .5 + .5
-        density = self.density_net(clarity * 2. - 1.) * .5 + .5
-        return clarity, density
-    
-    def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
-=======
         clarity = self.clarity_net(cat_features) # * 2. - 1.) * .5 + .5
         density = self.density_net(clarity) # * 2. - 1.) * .5 + .5
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
         frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         return frustum
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -680,11 +628,7 @@ class NeRVLightningModule(LightningModule):
         #     optimizer, T_max=10, eta_min=self.lr / 10
         # )
         # return [optimizer], [scheduler]
-<<<<<<< HEAD
         return torch.optim.Adam(self.parameters(), lr=self.lr)
-=======
-        return torch.optim.RAdam(self.parameters(), lr=self.lr)
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
         
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -737,11 +681,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-<<<<<<< HEAD
-        # accumulate_grad_batches=4, 
-=======
-        accumulate_grad_batches=4, 
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
+        accumulate_grad_batches=4, \
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
@@ -751,15 +691,10 @@ if __name__ == "__main__":
         # gradient_clip_val=5, 
         # gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
-<<<<<<< HEAD
         # detect_anomaly=True, 
         benchmark=None, 
         deterministic=False,
         profiler="simple",
-=======
-        detect_anomaly=True, 
-        # profiler="simple",
->>>>>>> cccf0a090f402cf0e1af234cc67c87b7f119b210
     )
 
     # Create data module
