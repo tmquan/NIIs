@@ -79,8 +79,8 @@ class PictureModel(nn.Module):
 
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
         screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
-        normalized = lambda x: (x - x.min())/(x.max() - x.min() + 1e-8)
-        standardized = lambda x: (x - x.mean())/(x.std() + 1e-8) # 1e-8 to avoid zero division
+        normalized = lambda x: (x - x.min())/(x.max() - x.min() + 1e-6)
+        standardized = lambda x: (x - x.mean())/(x.std() + 1e-6) # 1e-6 to avoid zero division
         if norm_type == "normalized":
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
@@ -506,8 +506,8 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
                   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                  + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
-                  + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
+                  + self.l1loss(torch.rand_like(orgvol_ct), estrad_ct[:,[1]]) \
+                  + self.l1loss(torch.rand_like(estvol_xr), estrad_xr[:,[1]]) 
                 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
