@@ -9,16 +9,19 @@ from pytorch_lightning.callbacks import DeviceStatsMonitor
 from pytorch_lightning.callbacks import ModelSummary
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.seed import seed_everything
+from pytorch_lightning.strategies import DDPStrategy
+
 # from sympy import re
 
 # from torchmetrics.image import LearnedPerceptualImagePatchSimilarity
 import torch
 torch.cuda.empty_cache()
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+torch.multiprocessing.set_sharing_strategy('file_system')
 
-# import resource
-# rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
-# resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
+import resource
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (8192, rlimit[1]))
 
 # from kornia.color import GrayscaleToRgb
 # from kornia.augmentation import Normalize
@@ -508,9 +511,9 @@ class NeRVLightningModule(LightningModule):
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                  + self.l1loss(torch.rand_like(orgvol_ct), estrad_ct[:,[1]]) \
-                  + self.l1loss(torch.rand_like(estvol_xr), estrad_xr[:,[1]]) 
+                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) #\
+                #   + self.l1loss(torch.rand_like(orgvol_ct), estrad_ct[:,[1]]) \
+                #   + self.l1loss(torch.rand_like(estvol_xr), estrad_xr[:,[1]]) 
                 
         im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
                   + self.l1loss(orgimg_xr, estimg_xr) 
@@ -681,8 +684,9 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        accumulate_grad_batches=4, \
-        strategy="ddp", #"horovod", #"deepspeed", #"ddp_sharded",
+        accumulate_grad_batches=4, 
+        # strategy=DDPStrategy(static_graph=True),
+        strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
@@ -692,9 +696,9 @@ if __name__ == "__main__":
         # gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
         # detect_anomaly=True, 
-        benchmark=None, 
-        deterministic=False,
-        profiler="simple",
+        # benchmark=None, 
+        # deterministic=False,
+        # profiler="simple",
     )
 
     # Create data module
