@@ -631,7 +631,7 @@ class NeRVLightningModule(LightningModule):
         #     optimizer, T_max=10, eta_min=self.lr / 10
         # )
         # return [optimizer], [scheduler]
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.RAdam(self.parameters(), lr=self.lr)
         
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -684,7 +684,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        accumulate_grad_batches=4, 
+        # accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
         strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
