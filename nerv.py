@@ -352,7 +352,7 @@ class NeRVLightningModule(LightningModule):
         self.clarity_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
-                in_channels=16, #self.shape,
+                in_channels=6, #self.shape,
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
@@ -439,11 +439,7 @@ class NeRVLightningModule(LightningModule):
         return pictures, radiances
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
-        # with torch.no_grad():
-        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape)
-        pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
         cat_features = torch.cat([image2d, 
-                                  pos_encoding.to(image2d.device),
                                   frustum_feat.view(frustum_feat.shape[0], 
                                                     frustum_feat.shape[1], 1, 1).repeat(1, 1, self.shape, self.shape)], dim=1)
         
