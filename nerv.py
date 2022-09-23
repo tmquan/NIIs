@@ -512,8 +512,8 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
                   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                  + self.l1loss(torch.mean(estrad_ct[:,[1]]), 1.0) \
-                  + self.l1loss(torch.mean(estrad_xr[:,[1]]), 1.0) 
+                  + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
+                  + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
                 #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
                 #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
                 
