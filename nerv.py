@@ -431,7 +431,7 @@ class NeRVLightningModule(LightningModule):
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = densities / factor,
+            densities = (densities * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
             voxel_size = 3.2 / self.shape,
         )
                 
@@ -511,9 +511,9 @@ class NeRVLightningModule(LightningModule):
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
                   + self.l1loss(estrad_xr, recrad_xr) \
                   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                  + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
-                  + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
+                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) #\
+                #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
+                #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
                 #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
                 #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
                 
@@ -688,7 +688,7 @@ if __name__ == "__main__":
         ],
         # accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
-        strategy="ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
