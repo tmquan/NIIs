@@ -335,7 +335,7 @@ class NeRVLightningModule(LightningModule):
             UNet(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=2, 
+                out_channels=1, 
                 channels=(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
@@ -421,7 +421,7 @@ class NeRVLightningModule(LightningModule):
 
         features = image3d.repeat(1, 3, 1, 1, 1)
         # features = radiances[:,[0]].repeat(1, 3, 1, 1, 1)
-        densities = radiances[:,[1]]
+        # densities = radiances[:,[1]]
         # with torch.no_grad():
         frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
@@ -431,7 +431,7 @@ class NeRVLightningModule(LightningModule):
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (densities * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
+            densities = (radiances * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
             voxel_size = 3.2 / self.shape,
         )
                 
@@ -490,15 +490,15 @@ class NeRVLightningModule(LightningModule):
         
         if batch_idx == 0:
             viz2d = torch.cat([
-                        torch.cat([orgvol_ct[...,self.shape//2], 
+                        torch.cat([orgvol_ct[..., self.shape//2], 
                                    estimg_ct,
                                    orgimg_xr], dim=-1),
-                        torch.cat([estvol_ct[...,self.shape//2],
+                        torch.cat([estvol_ct[..., self.shape//2],
                                    recimg_ct, 
                                    estimg_xr], dim=-1),
-                        torch.cat([estrad_ct[:, [1], ..., self.shape//2],
-                                   recrad_ct[:, [1], ..., self.shape//2],
-                                   estrad_xr[:, [1], ..., self.shape//2]], dim=-1),
+                        torch.cat([estrad_ct[..., self.shape//2],
+                                   recrad_ct[..., self.shape//2],
+                                   estrad_xr[..., self.shape//2]], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
@@ -509,9 +509,9 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estvol_xr, recvol_xr) 
 
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-                  + self.l1loss(estrad_xr, recrad_xr) \
-                  + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) #\
+                  + self.l1loss(estrad_xr, recrad_xr) #\
+                #   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+                #   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) #\
                 #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
                 #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
                 #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
