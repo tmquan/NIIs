@@ -530,16 +530,16 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
-        # if stage=='train':
-        #     if (batch_idx % 3) == 1:
-        #         orgvol_ct = torch.rand_like(orgvol_ct)
-        #     elif (batch_idx % 3) == 2:
-        #         # Calculate interpolation
-        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-        #         vol3d = orgvol_ct.detach().clone()
-        #         noise = torch.rand_like(vol3d)
-        #         alpha = alpha.expand_as(vol3d)
-        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        if stage=='train':
+            if (batch_idx % 3) == 1:
+                orgvol_ct = torch.rand_like(orgvol_ct)
+            elif (batch_idx % 3) == 2:
+                # Calculate interpolation
+                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                vol3d = orgvol_ct.detach().clone()
+                noise = torch.rand_like(vol3d)
+                alpha = alpha.expand_as(vol3d)
+                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -591,7 +591,7 @@ class NeRVLightningModule(LightningModule):
         cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
                   + self.l1loss(orgcam_xr, reccam_xr) 
 
-        info = {f'loss': 1e1*im3d_loss + 1e1*tran_loss + 1e1*im2d_loss + 1e1*cams_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -752,7 +752,7 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        # accumulate_grad_batches=4, 
+        accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
         strategy="fsdp", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
