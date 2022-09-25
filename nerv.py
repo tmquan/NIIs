@@ -78,7 +78,7 @@ class PictureModel(nn.Module):
         super().__init__()
         self._renderer = renderer
         
-    def forward(self, cameras, volumes, norm_type="standardized", scaler=1.0, eps=1e-8):
+    def forward(self, cameras, volumes, norm_type="standardized", eps=1e-8):
         screen_RGBA, ray_bundles = self._renderer(cameras=cameras, volumes=volumes) #[...,:3]
         # rays_points = ray_bundle_to_ray_points(ray_bundles)
 
@@ -90,7 +90,6 @@ class PictureModel(nn.Module):
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
-        screen_RGB *= scaler
         # screen_RGB = torch.clamp(screen_RGB, 0.0, 1.0)
         return screen_RGB
 
@@ -302,8 +301,6 @@ class NeRVLightningModule(LightningModule):
         self.logsdir = hparams.logsdir
         self.lr = hparams.lr
         self.shape = hparams.shape
-        self.factor = hparams.factor
-        self.scaler = hparams.scaler
         self.weight_decay = hparams.weight_decay
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
@@ -335,7 +332,7 @@ class NeRVLightningModule(LightningModule):
             UNet(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=1, 
+                out_channels=2, 
                 channels=(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=3,
@@ -406,8 +403,6 @@ class NeRVLightningModule(LightningModule):
         pass
 
     def forward_picture(self, image3d: torch.Tensor, frustum_feat: torch.Tensor, 
-        factor: float=1.0, 
-        scaler: float=1.0, 
         opacities: str= 'stochastic',
         norm_type: str="normalized"
     ) -> torch.Tensor:
@@ -421,7 +416,7 @@ class NeRVLightningModule(LightningModule):
 
         features = image3d.repeat(1, 3, 1, 1, 1)
         # features = radiances[:,[0]].repeat(1, 3, 1, 1, 1)
-        # densities = radiances[:,[1]]
+        densities = radiances[:,[1]]
         # with torch.no_grad():
         frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
                             batch_size=self.batch_size, 
@@ -431,11 +426,11 @@ class NeRVLightningModule(LightningModule):
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (radiances * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
+            densities = (densities * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
             voxel_size = 3.2 / self.shape,
         )
                 
-        pictures = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type, scaler=scaler)
+        pictures = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type)
         return pictures, radiances
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
@@ -477,16 +472,16 @@ class NeRVLightningModule(LightningModule):
         # XR path
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estrad_xr = self.forward_picture(estvol_xr, orgcam_xr, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
+        estimg_xr, estrad_xr = self.forward_picture(estvol_xr, orgcam_xr, opacities='stochastic', norm_type='normalized')
         reccam_xr = self.forward_frustum(estimg_xr)
         recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        recimg_xr, recrad_xr = self.forward_picture(recvol_xr, reccam_xr, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
+        recimg_xr, recrad_xr = self.forward_picture(recvol_xr, reccam_xr, opacities='stochastic', norm_type='normalized')
         
         # CT path
-        estimg_ct, estrad_ct = self.forward_picture(orgvol_ct, orgcam_ct, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
+        estimg_ct, estrad_ct = self.forward_picture(orgvol_ct, orgcam_ct, opacities='stochastic', norm_type='normalized')
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, factor=self.factor, opacities='stochastic', scaler=self.scaler, norm_type='normalized')
+        recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, opacities='stochastic', norm_type='normalized')
         
         if batch_idx == 0:
             viz2d = torch.cat([
@@ -496,9 +491,9 @@ class NeRVLightningModule(LightningModule):
                         torch.cat([estvol_ct[..., self.shape//2],
                                    recimg_ct, 
                                    estimg_xr], dim=-1),
-                        torch.cat([estrad_ct[..., self.shape//2],
-                                   recrad_ct[..., self.shape//2],
-                                   estrad_xr[..., self.shape//2]], dim=-1),
+                        torch.cat([estrad_ct[:, [1], ..., self.shape//2],
+                                   recrad_ct[:, [1], ..., self.shape//2],
+                                   estrad_xr[:, [1], ..., self.shape//2]], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
@@ -509,9 +504,9 @@ class NeRVLightningModule(LightningModule):
                   + self.l1loss(estvol_xr, recvol_xr) 
 
         tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-                  + self.l1loss(estrad_xr, recrad_xr) #\
-                #   + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                #   + self.l1loss(estvol_xr, estrad_xr[:,[0]]) #\
+                  + self.l1loss(estrad_xr, recrad_xr) \
+                  + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
                 #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
                 #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
                 #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
@@ -648,8 +643,6 @@ if __name__ == "__main__":
     parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
-    parser.add_argument("--scaler", type=float, default=20.0, help="XRay amplification")
-    parser.add_argument("--factor", type=float, default=64.0, help="XRay transparency")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
     
