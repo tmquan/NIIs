@@ -339,10 +339,31 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # UNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1,
+            #     img_size=self.shape,
+            #     feature_size=16,
+            #     hidden_size=768,
+            #     mlp_dim=3072,
+            #     num_heads=12,
+            #     pos_embed="perceptron",
+            #     norm_name="instance",
+            #     res_block=True,
+            #     dropout_rate=0.0,
+            # )
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     img_size=(self.shape ,self.shape, self.shape), 
+            #     in_channels=1, 
+            #     out_channels=1, 
+            #     feature_size=24
+            # )
             # nn.Sigmoid(), 
         )
 
@@ -357,10 +378,31 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # UNETR(
+            #     spatial_dims=2,
+            #     in_channels=16,
+            #     out_channels=self.shape,
+            #     img_size=self.shape,
+            #     feature_size=16,
+            #     hidden_size=768,
+            #     mlp_dim=3072,
+            #     num_heads=12,
+            #     pos_embed="perceptron",
+            #     norm_name="instance",
+            #     res_block=True,
+            #     dropout_rate=0.0,
+            # ),
+            # SwinUNETR(
+            #     spatial_dims=2,
+            #     img_size=(self.shape ,self.shape), 
+            #     in_channels=16, 
+            #     out_channels=self.shape, 
+            #     feature_size=24
+            # ),
             Reshape(*[1, self.shape, self.shape, self.shape]),
             # nn.Sigmoid(), 
         )
@@ -376,10 +418,31 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # UNETR(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1,
+            #     img_size=self.shape,
+            #     feature_size=16,
+            #     hidden_size=768,
+            #     mlp_dim=3072,
+            #     num_heads=12,
+            #     pos_embed="perceptron",
+            #     norm_name="instance",
+            #     res_block=True,
+            #     dropout_rate=0.0,
+            # )
+            # SwinUNETR(
+            #     spatial_dims=3,
+            #     img_size=(self.shape ,self.shape, self.shape), 
+            #     in_channels=1, 
+            #     out_channels=1, 
+            #     feature_size=24
+            # )
             # nn.Sigmoid(),  
         )
 
@@ -691,7 +754,7 @@ if __name__ == "__main__":
         ],
         # accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
-        strategy="fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="fsdp", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
