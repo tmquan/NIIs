@@ -401,7 +401,7 @@ class NeRVLightningModule(LightningModule):
                 classification=True, 
                 num_classes=5,  
                 spatial_dims=2, 
-                post_activation=None, 
+                post_activation="Tanh", 
             ),
             # nn.Sigmoid(),
         )
@@ -457,7 +457,7 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d)[0] # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = (self.frustum_net(image2d)[0] * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
