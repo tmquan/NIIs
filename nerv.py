@@ -339,7 +339,7 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -357,7 +357,7 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -376,7 +376,7 @@ class NeRVLightningModule(LightningModule):
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
@@ -384,16 +384,26 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.frustum_net = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                # dropout_prob=0.5,
-                pretrained=True, 
+            # DenseNet201(
+            #     spatial_dims=2,
+            #     in_channels=1,
+            #     out_channels=5,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     # norm=Norm.BATCH,
+            #     # dropout_prob=0.5,
+            #     pretrained=True, 
+            # ),
+            ViT(
+                in_channels=1, 
+                img_size=(self.shape, self.shape), 
+                patch_size=(64, 64),
+                pos_embed='conv', 
+                classification=True, 
+                num_classes=5,  
+                spatial_dims=2, 
+                post_activation=None, 
             ),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
 
         self.l1loss = nn.L1Loss(reduction="mean")
@@ -447,7 +457,7 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d)[0] # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         return frustum
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -628,7 +638,7 @@ class NeRVLightningModule(LightningModule):
         #     optimizer, T_max=10, eta_min=self.lr / 10
         # )
         # return [optimizer], [scheduler]
-        return torch.optim.RAdam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
         
 if __name__ == "__main__":
     parser = ArgumentParser()
