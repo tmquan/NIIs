@@ -343,6 +343,15 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # FlexibleUNet(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=2, 
+            #     backbone="efficientnet-b7",
+            #     # decoder_channels=(256, 128, 64, 32, 16),
+            #     act=("LeakyReLU", {"inplace": True}), 
+            #     upsample="pixelshuffle",
+            # ),
             # UNETR(
             #     spatial_dims=3,
             #     in_channels=1,
@@ -382,6 +391,15 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # FlexibleUNet(
+            #     spatial_dims=2,
+            #     in_channels=16,
+            #     out_channels=self.shape, 
+            #     backbone="efficientnet-b7",
+            #     # decoder_channels=(512, 256, 128, 64, 32),
+            #     act=("LeakyReLU", {"inplace": True}), 
+            #     upsample="pixelshuffle",
+            # ),
             # UNETR(
             #     spatial_dims=2,
             #     in_channels=16,
@@ -422,6 +440,15 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="nontrainable",
             ), 
+            # FlexibleUNet(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=2, 
+            #     backbone="efficientnet-b7",
+            #     # decoder_channels=(256, 128, 64, 32, 16),
+            #     act=("LeakyReLU", {"inplace": True}), 
+            #     upsample="pixelshuffle",
+            # ),
             # UNETR(
             #     spatial_dims=3,
             #     in_channels=1,
@@ -531,9 +558,9 @@ class NeRVLightningModule(LightningModule):
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
         if stage=='train':
-            if (batch_idx % 3) == 1:
+            if (batch_idx % 4) == 1:
                 orgvol_ct = torch.rand_like(orgvol_ct)
-            elif (batch_idx % 3) == 2:
+            elif (batch_idx % 4) == 2:
                 # Calculate interpolation
                 alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
                 vol3d = orgvol_ct.detach().clone()
@@ -754,7 +781,7 @@ if __name__ == "__main__":
         ],
         accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
-        strategy="fsdp", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="ddp_sharded", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
