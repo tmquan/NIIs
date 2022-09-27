@@ -615,7 +615,8 @@ class NeRVLightningModule(LightningModule):
                       + self.l1loss(orgimg_xr, estimg_xr) 
                         
             cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                      + self.l1loss(orgcam_xr, reccam_xr) 
+                      + self.l1loss(orgcam_xr, reccam_xr)
+                       
             tran_loss = self.l1loss(estrad_ct, recrad_ct) \
                       + self.l1loss(estrad_xr, recrad_xr) \
                       + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
