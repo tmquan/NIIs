@@ -600,24 +600,29 @@ class NeRVLightningModule(LightningModule):
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         
         # Loss
-        im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                  + self.l1loss(estvol_xr, recvol_xr) 
+        # im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
+        #           + self.l1loss(estvol_xr, recvol_xr) 
 
-        tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-                  + self.l1loss(estrad_xr, recrad_xr) \
-                  + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                  + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
-                #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
-                #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
-                #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
+        # tran_loss = self.l1loss(estrad_ct, recrad_ct) \
+        #           + self.l1loss(estrad_xr, recrad_xr) \
+        #           + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+        #           + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
+        #         #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
+        #         #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
+        #         #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
+        #         #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
                 
-        im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-                  + self.l1loss(orgimg_xr, estimg_xr) 
+        # im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
+        #           + self.l1loss(orgimg_xr, estimg_xr) 
                     
-        cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                  + self.l1loss(orgcam_xr, reccam_xr) 
-
+        # cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
+        #           + self.l1loss(orgcam_xr, reccam_xr) 
+        
+        im3d_loss = self.l1loss(orgvol_ct, estvol_ct)
+        im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
+        cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
+        tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) 
+        
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
