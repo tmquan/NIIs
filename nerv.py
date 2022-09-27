@@ -304,6 +304,7 @@ class NeRVLightningModule(LightningModule):
         self.weight_decay = hparams.weight_decay
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
+        self.twoway = hparams.twoway
         self.save_hyperparameters()
 
         raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
@@ -600,28 +601,29 @@ class NeRVLightningModule(LightningModule):
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         
         # Loss
-        # im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-        #           + self.l1loss(estvol_xr, recvol_xr) 
+        if self.twoway:
+            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
+                      + self.l1loss(estvol_xr, recvol_xr) 
 
-        # tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-        #           + self.l1loss(estrad_xr, recrad_xr) \
-        #           + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-        #           + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-        #         #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
-        #         #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
-        #         #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
-        #         #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
-                
-        # im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-        #           + self.l1loss(orgimg_xr, estimg_xr) 
+            tran_loss = self.l1loss(estrad_ct, recrad_ct) \
+                      + self.l1loss(estrad_xr, recrad_xr) \
+                      + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+                      + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
+                    #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
+                    #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
+                    #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
+                    #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
                     
-        # cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-        #           + self.l1loss(orgcam_xr, reccam_xr) 
-        
-        im3d_loss = self.l1loss(orgvol_ct, estvol_ct)
-        im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
-        cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
-        tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) 
+            im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
+                      + self.l1loss(orgimg_xr, estimg_xr) 
+                        
+            cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
+                      + self.l1loss(orgcam_xr, reccam_xr) 
+        else:
+            im3d_loss = self.l1loss(orgvol_ct, estvol_ct)
+            im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
+            cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
+            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) 
         
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
@@ -750,7 +752,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
-    
+    parser.add_argument('--twoway', action='store_true')
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
     parser.add_argument("--datadir", type=str, default='data', help="data directory")
     parser.add_argument("--reduction", type=str, default='sum', help="mean or sum")
