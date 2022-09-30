@@ -341,17 +341,18 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="nontrainable",
+                dropout=0.5,
+                # mode="pixelshuffle",
             ), 
             # FlexibleUNet(
             #     spatial_dims=3,
             #     in_channels=1,
             #     out_channels=2, 
             #     backbone="efficientnet-b7",
-            #     # decoder_channels=(256, 128, 64, 32, 16),
+            #     decoder_channels=(640, 224, 80, 48, 32),
             #     act=("LeakyReLU", {"inplace": True}), 
             #     upsample="pixelshuffle",
+            #     dropout=0.5,
             # ),
             # UNETR(
             #     spatial_dims=3,
@@ -389,17 +390,18 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="nontrainable",
+                dropout=0.5,
+                # mode="pixelshuffle",
             ), 
             # FlexibleUNet(
             #     spatial_dims=2,
             #     in_channels=16,
             #     out_channels=self.shape, 
             #     backbone="efficientnet-b7",
-            #     # decoder_channels=(512, 256, 128, 64, 32),
+            #     decoder_channels=(640, 224, 80, 48, 32),
             #     act=("LeakyReLU", {"inplace": True}), 
             #     upsample="pixelshuffle",
+            #     dropout=0.5,
             # ),
             # UNETR(
             #     spatial_dims=2,
@@ -438,17 +440,18 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="nontrainable",
+                dropout=0.5,
+                # mode="pixelshuffle",
             ), 
             # FlexibleUNet(
             #     spatial_dims=3,
             #     in_channels=1,
             #     out_channels=2, 
             #     backbone="efficientnet-b7",
-            #     # decoder_channels=(256, 128, 64, 32, 16),
+            #     decoder_channels=(640, 224, 80, 48, 32),
             #     act=("LeakyReLU", {"inplace": True}), 
             #     upsample="pixelshuffle",
+            #     dropout=0.5,
             # ),
             # UNETR(
             #     spatial_dims=3,
@@ -475,25 +478,26 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.frustum_net = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                # dropout_prob=0.5,
-                pretrained=True, 
-            ),
-            # ViT(
-            #     in_channels=1, 
-            #     img_size=(self.shape, self.shape), 
-            #     patch_size=(64, 64),
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     num_classes=5,  
-            #     spatial_dims=2, 
-            #     post_activation="Tanh", 
+            # DenseNet201(
+            #     spatial_dims=2,
+            #     in_channels=1,
+            #     out_channels=5,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     norm=Norm.BATCH,
+            #     # dropout_prob=0.5,
+            #     pretrained=True, 
             # ),
+            ViT(
+                in_channels=1, 
+                img_size=(self.shape, self.shape), 
+                patch_size=(64, 64),
+                pos_embed='conv', 
+                classification=True, 
+                num_classes=5,  
+                spatial_dims=2, 
+                post_activation="Tanh", 
+                dropout_rate=0.5
+            ),
             # nn.Sigmoid(),
         )
 
@@ -548,7 +552,9 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d) #[0] * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        # frustum = self.frustum_net(image2d)[0])# * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 #[0]# [0, 1] 
+        # frustum = self.frustum_net(image2d)[0]
         return frustum
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
@@ -574,59 +580,43 @@ class NeRVLightningModule(LightningModule):
         orgcam_xr = self.forward_frustum(orgimg_xr)
         estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
         estimg_xr, estrad_xr = self.forward_picture(estvol_xr, orgcam_xr, opacities='stochastic', norm_type='normalized')
-        reccam_xr = self.forward_frustum(estimg_xr)
-        recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        recimg_xr, recrad_xr = self.forward_picture(recvol_xr, reccam_xr, opacities='stochastic', norm_type='normalized')
+        # reccam_xr = self.forward_frustum(estimg_xr)
+        # recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
+        # recimg_xr, recrad_xr = self.forward_picture(recvol_xr, reccam_xr, opacities='stochastic', norm_type='normalized')
         
         # CT path
         estimg_ct, estrad_ct = self.forward_picture(orgvol_ct, orgcam_ct, opacities='stochastic', norm_type='normalized')
         estcam_ct = self.forward_frustum(estimg_ct)
         estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, opacities='stochastic', norm_type='normalized')
+        # recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, opacities='stochastic', norm_type='normalized')
         
         if batch_idx == 0:
             viz2d = torch.cat([
                         torch.cat([orgvol_ct[..., self.shape//2], 
                                    estimg_ct,
-                                   orgimg_xr], dim=-1),
-                        torch.cat([estvol_ct[..., self.shape//2],
-                                   recimg_ct, 
-                                   estimg_xr], dim=-1),
-                        torch.cat([estrad_ct[:, [1], ..., self.shape//2],
-                                   recrad_ct[:, [1], ..., self.shape//2],
-                                   estrad_xr[:, [1], ..., self.shape//2]], dim=-1),
+                                   orgimg_xr, 
+                                   estvol_xr[..., self.shape//2],
+                                   ], dim=-1),
+                        torch.cat([
+                                   estrad_ct[:, [1], ..., self.shape//2],
+                                   estvol_ct[..., self.shape//2],
+                                   estimg_xr,
+                                   estrad_xr[:, [1], ..., self.shape//2],
+                                   ], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
             tensorboard = self.logger.experiment
             tensorboard.add_image(f'{stage}_samples', grid.clamp(0., 1.), self.current_epoch*self.batch_size + batch_idx)
         
         # Loss
-        if self.oneway:
+        if self.oneway==1:
             im3d_loss = self.l1loss(orgvol_ct, estvol_ct)
             im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
             cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
             tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]])      
-            
-        else:
-            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                      + self.l1loss(estvol_xr, recvol_xr) 
-
-            im2d_loss = self.l1loss(estimg_ct, recimg_ct) \
-                      + self.l1loss(orgimg_xr, estimg_xr) 
-                        
-            cams_loss = self.l1loss(orgcam_ct, estcam_ct) \
-                      + self.l1loss(orgcam_xr, reccam_xr)
-                       
-            tran_loss = self.l1loss(estrad_ct, recrad_ct) \
-                      + self.l1loss(estrad_xr, recrad_xr) \
-                      + self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                      + self.l1loss(estvol_xr, estrad_xr[:,[0]]) \
-                    #   + self.l1loss(estrad_ct[:,[1]].mean(), torch.tensor([0.8], device=_device)) \
-                    #   + self.l1loss(estrad_xr[:,[1]].mean(), torch.tensor([0.8], device=_device)) 
-                    #   + self.l1loss(torch.ones_like(orgvol_ct), estrad_ct[:,[1]]) \
-                    #   + self.l1loss(torch.ones_like(estvol_xr), estrad_xr[:,[1]]) 
-                    
+        
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -753,7 +743,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
-    parser.add_argument('--oneway', action='store_true')
+    parser.add_argument('--oneway', type=int, default=1)
     parser.add_argument("--logsdir", type=str, default='logs', help="logging directory")
     parser.add_argument("--datadir", type=str, default='data', help="data directory")
     parser.add_argument("--reduction", type=str, default='sum', help="mean or sum")
@@ -833,11 +823,11 @@ if __name__ == "__main__":
     ]
 
     train_image2d_folders = [
-        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
-        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
-        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/ChinaSet/processed/images/'), 
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
-        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
+        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
         # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
