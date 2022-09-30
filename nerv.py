@@ -593,9 +593,9 @@ class NeRVLightningModule(LightningModule):
         if batch_idx == 0:
             viz2d = torch.cat([
                         torch.cat([orgvol_ct[..., self.shape//2], 
+                                   estrad_ct[:, [1], ..., self.shape//2],
                                    estimg_ct,
                                    estvol_ct[..., self.shape//2],
-                                   estrad_ct[:, [1], ..., self.shape//2],
                                    ], dim=-1),
                         torch.cat([orgimg_xr, 
                                    estvol_xr[..., self.shape//2],
