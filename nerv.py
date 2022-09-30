@@ -490,7 +490,7 @@ class NeRVLightningModule(LightningModule):
             ViT(
                 in_channels=1, 
                 img_size=(self.shape, self.shape), 
-                patch_size=(64, 64),
+                patch_size=(16, 16),
                 pos_embed='conv', 
                 classification=True, 
                 num_classes=5,  
@@ -594,14 +594,13 @@ class NeRVLightningModule(LightningModule):
             viz2d = torch.cat([
                         torch.cat([orgvol_ct[..., self.shape//2], 
                                    estimg_ct,
-                                   orgimg_xr, 
-                                   estvol_xr[..., self.shape//2],
-                                   ], dim=-1),
-                        torch.cat([
-                                   estrad_ct[:, [1], ..., self.shape//2],
                                    estvol_ct[..., self.shape//2],
-                                   estimg_xr,
+                                   estrad_ct[:, [1], ..., self.shape//2],
+                                   ], dim=-1),
+                        torch.cat([orgimg_xr, 
+                                   estvol_xr[..., self.shape//2],
                                    estrad_xr[:, [1], ..., self.shape//2],
+                                   estimg_xr,
                                    ], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
