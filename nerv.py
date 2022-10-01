@@ -272,13 +272,6 @@ class NeRVDataModule(LightningDataModule):
         )
         return self.val_loader
 
-# def _weights_init(m):
-#     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.Conv3d, nn.ConvTranspose3d)):
-#         torch.nn.init.normal_(m.weight, 0.0, 0.02)
-#     if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm3d)):
-#         torch.nn.init.normal_(m.weight, 0.0, 0.02)
-#         torch.nn.init.constant_(m.bias, 0)
-
 cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
@@ -344,38 +337,6 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
-            # FlexibleUNet(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=2, 
-            #     backbone="efficientnet-b7",
-            #     decoder_channels=(640, 224, 80, 48, 32),
-            #     act=("LeakyReLU", {"inplace": True}), 
-            #     upsample="pixelshuffle",
-            #     dropout=0.5,
-            # ),
-            # UNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1,
-            #     img_size=self.shape,
-            #     feature_size=16,
-            #     hidden_size=768,
-            #     mlp_dim=3072,
-            #     num_heads=12,
-            #     pos_embed="perceptron",
-            #     norm_name="instance",
-            #     res_block=True,
-            #     dropout_rate=0.0,
-            # )
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     img_size=(self.shape ,self.shape, self.shape), 
-            #     in_channels=1, 
-            #     out_channels=1, 
-            #     feature_size=24
-            # )
-            # nn.Sigmoid(), 
         )
 
         self.clarity_net = nn.Sequential(
@@ -393,37 +354,6 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
-            # FlexibleUNet(
-            #     spatial_dims=2,
-            #     in_channels=16,
-            #     out_channels=self.shape, 
-            #     backbone="efficientnet-b7",
-            #     decoder_channels=(640, 224, 80, 48, 32),
-            #     act=("LeakyReLU", {"inplace": True}), 
-            #     upsample="pixelshuffle",
-            #     dropout=0.5,
-            # ),
-            # UNETR(
-            #     spatial_dims=2,
-            #     in_channels=16,
-            #     out_channels=self.shape,
-            #     img_size=self.shape,
-            #     feature_size=16,
-            #     hidden_size=768,
-            #     mlp_dim=3072,
-            #     num_heads=12,
-            #     pos_embed="perceptron",
-            #     norm_name="instance",
-            #     res_block=True,
-            #     dropout_rate=0.0,
-            # ),
-            # SwinUNETR(
-            #     spatial_dims=2,
-            #     img_size=(self.shape ,self.shape), 
-            #     in_channels=16, 
-            #     out_channels=self.shape, 
-            #     feature_size=24
-            # ),
             Reshape(*[1, self.shape, self.shape, self.shape]),
             # nn.Sigmoid(), 
         )
@@ -443,38 +373,6 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
-            # FlexibleUNet(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=2, 
-            #     backbone="efficientnet-b7",
-            #     decoder_channels=(640, 224, 80, 48, 32),
-            #     act=("LeakyReLU", {"inplace": True}), 
-            #     upsample="pixelshuffle",
-            #     dropout=0.5,
-            # ),
-            # UNETR(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1,
-            #     img_size=self.shape,
-            #     feature_size=16,
-            #     hidden_size=768,
-            #     mlp_dim=3072,
-            #     num_heads=12,
-            #     pos_embed="perceptron",
-            #     norm_name="instance",
-            #     res_block=True,
-            #     dropout_rate=0.0,
-            # )
-            # SwinUNETR(
-            #     spatial_dims=3,
-            #     img_size=(self.shape ,self.shape, self.shape), 
-            #     in_channels=1, 
-            #     out_channels=1, 
-            #     feature_size=24
-            # )
-            # nn.Sigmoid(),  
         )
 
         self.frustum_net = nn.Sequential(
@@ -505,24 +403,26 @@ class NeRVLightningModule(LightningModule):
             DenseNet201(
                 spatial_dims=2,
                 in_channels=1,
-                out_channels=5,
+                out_channels=1,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 # pretrained=True, 
             ),
+            # nn.Sigmoid(), 
         )
 
         self.discrim3d = nn.Sequential(
             DenseNet201(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=5,
+                out_channels=1,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 # dropout_prob=0.5,
                 # pretrained=True, 
             ),
+            # nn.Sigmoid(), 
         )
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -649,94 +549,42 @@ class NeRVLightningModule(LightningModule):
         
         # train generator
         if optimizer_idx == 0:
-            g_loss = self.gen_step(
-                fake_volume=estvol_xr,
-                real_volume=orgvol_ct,
-                fake_images=estimg_ct,
-                real_images=orgimg_xr
-            )
+            # ground truth result (ie: all fake)
+            # put on GPU because we created this tensor inside training_loop
+            valid = torch.ones(self.batch_size, 1).to(_device)
+
+            # adversarial loss is binary cross-entropy
+            # g_loss = self.adversarial_loss(self.discriminator(self(z)), valid)
+            g_loss = self.adversarial_loss(self.discrim2d(estimg_ct), valid) \
+                   + self.adversarial_loss(self.discrim3d(estvol_xr), valid) 
+
             self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss + g_loss} 
             return info
 
         # train discriminator
         elif optimizer_idx == 1:
-            d_loss = self.discrim_step(
-                fake_volume=estvol_xr,
-                real_volume=orgvol_ct,
-                fake_images=estimg_ct,
-                real_images=orgimg_xr
-            )
+            # how well can it label as real?
+            valid = torch.ones(self.batch_size, 1).to(_device)
+
+            # real_loss = self.adversarial_loss(self.discriminator(imgs), valid)
+            real_loss = self.adversarial_loss(self.discrim2d(orgimg_xr), valid)\
+                      + self.adversarial_loss(self.discrim3d(orgvol_ct), valid) 
+
+            # how well can it label as fake?
+            fake = torch.zeros(self.batch_size, 1).to(_device)
+
+            # fake_loss = self.adversarial_loss(self.discriminator(self(z).detach()), fake)
+            fake_loss = self.adversarial_loss(self.discrim2d(estimg_ct.detach()), fake) \
+                      + self.adversarial_loss(self.discrim3d(estvol_xr.detach()), fake) 
+            # discriminator loss is the average of these
+            d_loss = (real_loss + fake_loss) / 2
             self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
             info = {f'loss': d_loss} 
             return info
 
-            # d_grad = self.compute_gradient_penalty(
-            #     fake_volume=estvol_xr, 
-            #     real_volume=orgvol_ct,
-            #     fake_images=estimg_ct, 
-            #     real_images=orgimg_xr
-            # ) 
-
-            # info = {f'loss': d_loss+10*d_grad} 
-            # return info
-
-    def discrim_step(self, fake_volume: torch.Tensor, real_volume: torch.Tensor, fake_images: torch.Tensor, real_images: torch.Tensor):
-        real_logits = self.discrim3d(real_volume) + self.discrim2d(real_images) 
-        fake_logits = self.discrim3d(fake_volume) + self.discrim2d(fake_images) 
-        real_loss = F.softplus(-real_logits).mean() 
-        fake_loss = F.softplus(+fake_logits).mean()
-        return real_loss + fake_loss 
-
-    def gen_step(self, fake_volume: torch.Tensor, real_volume: torch.Tensor, fake_images: torch.Tensor, real_images: torch.Tensor):
-        fake_logits = self.discrim3d(fake_volume) + self.discrim2d(fake_images) 
-        fake_loss = F.softplus(-fake_logits).mean()
-        return fake_loss 
-
-    def compute_gradient_penalty(self, fake_volume, real_volume, fake_images, real_images):
-        """Calculates the gradient penalty loss for WGAN GP"""
-        # Random weight term for interpolation between real and fake samples
-        alpha = torch.Tensor(np.random.random((real_volume.size(0), 1, 1, 1))).to(self.device)
-        # Get random interpolation between real and fake samples
-        interp_3d = (alpha * real_volume + ((1 - alpha) * fake_volume)).requires_grad_(True)
-        interp_3d = interp_3d.to(self.device)
-        d_interp_3d = self.discrim3d(interp_3d)
-        # fake = torch.Tensor(real_volume.shape[0], 1).fill_(1.0).to(self.device)
-        fake_3d = torch.ones_like(d_interp_3d)
-        # Get gradient w.r.t. interpolates
-        gradients_3d = torch.autograd.grad(
-            outputs=d_interp_3d,
-            inputs=interp_3d,
-            grad_outputs=fake_3d,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        gradients_3d = gradients_3d.view(gradients_3d.size(0), -1).to(self.device)
-        
-        #
-        gamma = torch.Tensor(np.random.random((real_images.size(0), 1, 1, 1))).to(self.device)
-        # Get random interpolation between real and fake samples
-        interp_2d = (gamma * real_images + ((1 - gamma) * fake_images)).requires_grad_(True)
-        interp_2d = interp_2d.to(self.device)
-        d_interp_2d = self.discrim2d(interp_2d)
-        # fake = torch.Tensor(real_images.shape[0], 1).fill_(1.0).to(self.device)
-        fake_2d = torch.ones_like(d_interp_2d)
-        # Get gradient w.r.t. interpolates
-        gradients_2d = torch.autograd.grad(
-            outputs=d_interp_2d,
-            inputs=interp_2d,
-            grad_outputs=fake_2d,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        gradients_2d = gradients_2d.view(gradients_2d.size(0), -1).to(self.device)
-                     
-        #
-        gradient_penalty = ((gradients_3d.norm(2, dim=1) - 1) ** 2).mean() \
-                         + ((gradients_2d.norm(2, dim=1) - 1) ** 2).mean()
-        return gradient_penalty
+    def adversarial_loss(self, y_hat, y):
+        return F.binary_cross_entropy_with_logits(y_hat, y)
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         return self._common_step(batch, batch_idx, optimizer_idx, stage='train')
