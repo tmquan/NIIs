@@ -840,8 +840,8 @@ if __name__ == "__main__":
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
         # stochastic_weight_avg=True,
         # auto_scale_batch_size=True, 
-        gradient_clip_val=5, 
-        gradient_clip_algorithm='norm', #'norm', #'value'
+        # gradient_clip_val=5, 
+        # gradient_clip_algorithm='norm', #'norm', #'value'
         # track_grad_norm=2, 
         # detect_anomaly=True, 
         # benchmark=None, 
