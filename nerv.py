@@ -376,26 +376,26 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.frustum_net = nn.Sequential(
-            # DenseNet201(
-            #     spatial_dims=2,
-            #     in_channels=1,
-            #     out_channels=5,
-            #     act=("LeakyReLU", {"inplace": True}),
-            #     norm=Norm.BATCH,
-            #     # dropout_prob=0.5,
-            #     pretrained=True, 
-            # ),
-            ViT(
-                in_channels=1, 
-                img_size=(self.shape, self.shape), 
-                patch_size=(16, 16),
-                pos_embed='conv', 
-                classification=True, 
-                num_classes=5,  
-                spatial_dims=2, 
-                post_activation="Tanh", 
-                # dropout_rate=0.5
+            DenseNet201(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=5,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
+                dropout_prob=0.5,
+                pretrained=True, 
             ),
+            # ViT(
+            #     in_channels=1, 
+            #     img_size=(self.shape, self.shape), 
+            #     patch_size=(32, 32),
+            #     pos_embed='conv', 
+            #     classification=True, 
+            #     num_classes=5,  
+            #     spatial_dims=2, 
+            #     post_activation="Tanh", 
+            #     # dropout_rate=0.5
+            # ),
             # nn.Sigmoid(),
         )
 
@@ -406,9 +406,20 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 # pretrained=True, 
             ),
+            # ViT(
+            #     in_channels=1, 
+            #     img_size=(self.shape, self.shape), 
+            #     patch_size=(32, 32),
+            #     pos_embed='conv', 
+            #     classification=True, 
+            #     num_classes=1,  
+            #     spatial_dims=2, 
+            #     post_activation="Tanh", 
+            #     # dropout_rate=0.5
+            # ),
             # nn.Sigmoid(), 
         )
 
@@ -419,9 +430,20 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout_prob=0.5,
+                dropout_prob=0.5,
                 # pretrained=True, 
             ),
+            # ViT(
+            #     in_channels=1, 
+            #     img_size=(self.shape, self.shape, self.shape), 
+            #     patch_size=(32, 32, 32),
+            #     pos_embed='conv', 
+            #     classification=True, 
+            #     num_classes=1,  
+            #     spatial_dims=3, 
+            #     post_activation="Tanh", 
+            #     # dropout_rate=0.5
+            # ),
             # nn.Sigmoid(), 
         )
         self.l1loss = nn.L1Loss(reduction="mean")
@@ -476,7 +498,7 @@ class NeRVLightningModule(LightningModule):
     
     def forward_frustum(self, image2d: torch.Tensor):
         # frustum = self.frustum_net(image2d)[0])# * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
-        frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         # frustum = self.frustum_net(image2d)[0]
         return frustum
 
@@ -685,7 +707,7 @@ if __name__ == "__main__":
         ],
         # accumulate_grad_batches=4, 
         # strategy=DDPStrategy(static_graph=True),
-        strategy="ddp", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        strategy="ddp_sharded", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
