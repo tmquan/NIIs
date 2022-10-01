@@ -667,16 +667,19 @@ class NeRVLightningModule(LightningModule):
                 fake_images=estimg_ct,
                 real_images=orgimg_xr
             )
-            d_grad = self.compute_gradient_penalty(
-                fake_volume=estvol_xr, 
-                real_volume=orgvol_ct,
-                fake_images=estimg_ct, 
-                real_images=orgimg_xr
-            ) 
-
             self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
-            info = {f'loss': d_loss+10*d_grad} 
+            info = {f'loss': d_loss} 
             return info
+
+            # d_grad = self.compute_gradient_penalty(
+            #     fake_volume=estvol_xr, 
+            #     real_volume=orgvol_ct,
+            #     fake_images=estimg_ct, 
+            #     real_images=orgimg_xr
+            # ) 
+
+            # info = {f'loss': d_loss+10*d_grad} 
+            # return info
 
     def discrim_step(self, fake_volume: torch.Tensor, real_volume: torch.Tensor, fake_images: torch.Tensor, real_images: torch.Tensor):
         real_logits = self.discrim3d(real_volume) + self.discrim2d(real_images) 
