@@ -587,16 +587,16 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
 
-        if stage=='train':
-            if (batch_idx % 4) == 1:
-                orgvol_ct = torch.rand_like(orgvol_ct)
-            elif (batch_idx % 4) == 2:
-                # Calculate interpolation
-                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-                vol3d = orgvol_ct.detach().clone()
-                noise = torch.rand_like(vol3d)
-                alpha = alpha.expand_as(vol3d)
-                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        # if stage=='train':
+        #     if (batch_idx % 4) == 1:
+        #         orgvol_ct = torch.rand_like(orgvol_ct)
+        #     elif (batch_idx % 4) == 2:
+        #         # Calculate interpolation
+        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+        #         vol3d = orgvol_ct.detach().clone()
+        #         noise = torch.rand_like(vol3d)
+        #         alpha = alpha.expand_as(vol3d)
+        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
