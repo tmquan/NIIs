@@ -376,76 +376,29 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.frustum_net = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=5,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout_prob=0.5,
-                pretrained=True, 
-            ),
-            # ViT(
-            #     in_channels=1, 
-            #     img_size=(self.shape, self.shape), 
-            #     patch_size=(32, 32),
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     num_classes=5,  
-            #     spatial_dims=2, 
-            #     post_activation="Tanh", 
-            #     # dropout_rate=0.5
+            # DenseNet201(
+            #     spatial_dims=2,
+            #     in_channels=1,
+            #     out_channels=5,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     norm=Norm.BATCH,
+            #     dropout_prob=0.5,
+            #     pretrained=True, 
             # ),
+            ViT(
+                in_channels=1, 
+                img_size=(self.shape, self.shape), 
+                patch_size=(16, 16),
+                pos_embed='conv', 
+                classification=True, 
+                num_classes=5,  
+                spatial_dims=2, 
+                post_activation="Tanh", 
+                dropout_rate=0.5
+            ),
             # nn.Sigmoid(),
         )
 
-        self.discrim2d = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=1,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout_prob=0.5,
-                # pretrained=True, 
-            ),
-            # ViT(
-            #     in_channels=1, 
-            #     img_size=(self.shape, self.shape), 
-            #     patch_size=(32, 32),
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     num_classes=1,  
-            #     spatial_dims=2, 
-            #     post_activation="Tanh", 
-            #     # dropout_rate=0.5
-            # ),
-            # nn.Sigmoid(), 
-        )
-
-        self.discrim3d = nn.Sequential(
-            DenseNet201(
-                spatial_dims=3,
-                in_channels=1,
-                out_channels=1,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout_prob=0.5,
-                # pretrained=True, 
-            ),
-            # ViT(
-            #     in_channels=1, 
-            #     img_size=(self.shape, self.shape, self.shape), 
-            #     patch_size=(32, 32, 32),
-            #     pos_embed='conv', 
-            #     classification=True, 
-            #     num_classes=1,  
-            #     spatial_dims=3, 
-            #     post_activation="Tanh", 
-            #     # dropout_rate=0.5
-            # ),
-            # nn.Sigmoid(), 
-        )
         self.l1loss = nn.L1Loss(reduction="mean")
         
 
@@ -497,8 +450,8 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        # frustum = self.frustum_net(image2d)[0])# * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
-        frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
+        frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 #[0]# [0, 1] 
+        # frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
         # frustum = self.frustum_net(image2d)[0]
         return frustum
 
@@ -567,103 +520,9 @@ class NeRVLightningModule(LightningModule):
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         
-        # return info
-        
-        # train generator
-        if optimizer_idx == 0:
-            g_loss = self.gen_step(
-                fake_volume=estvol_xr,
-                real_volume=orgvol_ct,
-                fake_images=estimg_ct,
-                real_images=orgimg_xr
-            )
-            self.log(f'{stage}_g_loss', g_loss, on_step=True, prog_bar=False, logger=True)
-            info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss + g_loss} 
-            return info
+        return info
 
-        # train discriminator
-        elif optimizer_idx == 1:
-            d_loss = self.discrim_step(
-                fake_volume=estvol_xr,
-                real_volume=orgvol_ct,
-                fake_images=estimg_ct,
-                real_images=orgimg_xr
-            )
-            self.log(f'{stage}_d_loss', d_loss, on_step=True, prog_bar=False, logger=True)
-            info = {f'loss': d_loss} 
-            return info
-
-            # d_grad = self.compute_gradient_penalty(
-            #     fake_volume=estvol_xr, 
-            #     real_volume=orgvol_ct,
-            #     fake_images=estimg_ct, 
-            #     real_images=orgimg_xr
-            # ) 
-
-            # info = {f'loss': d_loss+10*d_grad} 
-            # return info
-
-    def adversarial_loss(self, y_hat, y):
-        return F.binary_cross_entropy_with_logits(y_hat, y)
-
-    def discrim_step(self, fake_volume: torch.Tensor, real_volume: torch.Tensor, fake_images: torch.Tensor, real_images: torch.Tensor):
-        real_logits = self.discrim3d(real_volume) + self.discrim2d(real_images) 
-        fake_logits = self.discrim3d(fake_volume) + self.discrim2d(fake_images) 
-        real_loss = F.softplus(-real_logits).mean() 
-        fake_loss = F.softplus(+fake_logits).mean()
-        return real_loss + fake_loss 
-
-    def gen_step(self, fake_volume: torch.Tensor, real_volume: torch.Tensor, fake_images: torch.Tensor, real_images: torch.Tensor):
-        fake_logits = self.discrim3d(fake_volume) + self.discrim2d(fake_images) 
-        fake_loss = F.softplus(-fake_logits).mean()
-        return fake_loss 
-
-    def compute_gradient_penalty(self, fake_volume, real_volume, fake_images, real_images):
-        """Calculates the gradient penalty loss for WGAN GP"""
-        # Random weight term for interpolation between real and fake samples
-        alpha = torch.Tensor(np.random.random((real_volume.size(0), 1, 1, 1))).to(self.device)
-        # Get random interpolation between real and fake samples
-        interp_3d = (alpha * real_volume + ((1 - alpha) * fake_volume)).requires_grad_(True)
-        interp_3d = interp_3d.to(self.device)
-        d_interp_3d = self.discrim3d(interp_3d)
-        # fake = torch.Tensor(real_volume.shape[0], 1).fill_(1.0).to(self.device)
-        fake_3d = torch.ones_like(d_interp_3d)
-        # Get gradient w.r.t. interpolates
-        gradients_3d = torch.autograd.grad(
-            outputs=d_interp_3d,
-            inputs=interp_3d,
-            grad_outputs=fake_3d,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        gradients_3d = gradients_3d.view(gradients_3d.size(0), -1).to(self.device)
-        
-        #
-        gamma = torch.Tensor(np.random.random((real_images.size(0), 1, 1, 1))).to(self.device)
-        # Get random interpolation between real and fake samples
-        interp_2d = (gamma * real_images + ((1 - gamma) * fake_images)).requires_grad_(True)
-        interp_2d = interp_2d.to(self.device)
-        d_interp_2d = self.discrim2d(interp_2d)
-        # fake = torch.Tensor(real_images.shape[0], 1).fill_(1.0).to(self.device)
-        fake_2d = torch.ones_like(d_interp_2d)
-        # Get gradient w.r.t. interpolates
-        gradients_2d = torch.autograd.grad(
-            outputs=d_interp_2d,
-            inputs=interp_2d,
-            grad_outputs=fake_2d,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True,
-        )[0]
-        gradients_2d = gradients_2d.view(gradients_2d.size(0), -1).to(self.device)
-                     
-        #
-        gradient_penalty = ((gradients_3d.norm(2, dim=1) - 1) ** 2).mean() \
-                         + ((gradients_2d.norm(2, dim=1) - 1) ** 2).mean()
-        return gradient_penalty
-
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx=0):
         return self._common_step(batch, batch_idx, optimizer_idx, stage='train')
 
     def validation_step(self, batch, batch_idx):
@@ -686,17 +545,17 @@ class NeRVLightningModule(LightningModule):
         return self._common_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        opt_g = torch.optim.RAdam([
-            {'params': self.opacity_net.parameters()}, 
-            {'params': self.clarity_net.parameters()}, 
-            {'params': self.density_net.parameters()}, 
-            {'params': self.frustum_net.parameters()}, 
-        ], lr=1e0*(self.lr or self.learning_rate))
-        opt_d = torch.optim.RAdam([
-            {'params': self.discrim3d.parameters()},
-            {'params': self.discrim2d.parameters()},
-        ], lr=1e0*(self.lr or self.learning_rate))
-        return opt_g, opt_d
+        # opt_g = torch.optim.RAdam([
+        #     {'params': self.opacity_net.parameters()}, 
+        #     {'params': self.clarity_net.parameters()}, 
+        #     {'params': self.density_net.parameters()}, 
+        #     {'params': self.frustum_net.parameters()}, 
+        # ], lr=1e0*(self.lr or self.learning_rate))
+        # opt_d = torch.optim.RAdam([
+        #     {'params': self.discrim3d.parameters()},
+        #     {'params': self.discrim2d.parameters()},
+        # ], lr=1e0*(self.lr or self.learning_rate))
+        # return opt_g, opt_d
         # return torch.optim.RAdam([
         #         {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
@@ -709,7 +568,7 @@ class NeRVLightningModule(LightningModule):
         #     optimizer, T_max=10, eta_min=self.lr / 10
         # )
         # return [optimizer], [scheduler]
-        # return torch.optim.RAdam(self.parameters(), lr=self.lr)
+        return torch.optim.RAdam(self.parameters(), lr=self.lr)
         
 if __name__ == "__main__":
     parser = ArgumentParser()
