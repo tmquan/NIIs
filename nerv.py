@@ -375,16 +375,31 @@ class NeRVLightningModule(LightningModule):
             ), 
         )
 
-        self.frustum_net = nn.Sequential(
-            # DenseNet201(
-            #     spatial_dims=2,
-            #     in_channels=1,
-            #     out_channels=5,
-            #     act=("LeakyReLU", {"inplace": True}),
-            #     norm=Norm.BATCH,
-            #     dropout_prob=0.5,
-            #     pretrained=True, 
-            # ),
+        # self.frustum_net = nn.Sequential(
+        #     # DenseNet201(
+        #     #     spatial_dims=2,
+        #     #     in_channels=1,
+        #     #     out_channels=5,
+        #     #     act=("LeakyReLU", {"inplace": True}),
+        #     #     norm=Norm.BATCH,
+        #     #     dropout_prob=0.5,
+        #     #     pretrained=True, 
+        #     # ),
+        #     ViT(
+        #         in_channels=1, 
+        #         img_size=(self.shape, self.shape), 
+        #         patch_size=(16, 16),
+        #         pos_embed='conv', 
+        #         classification=True, 
+        #         num_classes=5,  
+        #         spatial_dims=2, 
+        #         post_activation="Tanh", 
+        #         dropout_rate=0.5
+        #     ),
+        #     # nn.Sigmoid(),
+        # )
+
+        self.frustum_net_0 = nn.Sequential(
             ViT(
                 in_channels=1, 
                 img_size=(self.shape, self.shape), 
@@ -396,7 +411,17 @@ class NeRVLightningModule(LightningModule):
                 post_activation="Tanh", 
                 dropout_rate=0.5
             ),
-            # nn.Sigmoid(),
+        )
+
+        self.frustum_net_1 = nn.Sequential(
+            DenseNet201(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=5,
+                dropout_prob=0.5,
+                pretrained=True, 
+            ),
+            nn.Tanh(),
         )
 
         self.l1loss = nn.L1Loss(reduction="mean")
@@ -450,10 +475,10 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 #[0]# [0, 1] 
-        # frustum = self.frustum_net(image2d) # * 2. - 1.) * .5 + .5 #[0]# [0, 1] 
-        # frustum = self.frustum_net(image2d)[0]
-        return frustum
+        # frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 
+        frustum_0 = self.frustum_net_0(image2d * 2. - 1.)[0] * .5 + .5 
+        frustum_1 = self.frustum_net_1(image2d * 2. - 1.)[0] * .5 + .5 
+        return 0.5*(frustum_0 + frustum_1)
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
