@@ -520,7 +520,7 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.l1loss(orgvol_ct, estvol_ct)
+            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) + self.l1loss(orgvol_ct, estmid_ct)
             im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
             cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
             tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]])      
