@@ -84,9 +84,12 @@ class PictureModel(nn.Module):
 
         screen_RGBA = screen_RGBA.permute(0, 3, 2, 1) # 3 for NeRF
         screen_RGB = screen_RGBA[:, :3].mean(dim=1, keepdim=True)
+        minimized = lambda x: (x + eps)/(x.max() + eps)
         normalized = lambda x: (x - x.min() + eps)/(x.max() - x.min() + eps)
         standardized = lambda x: (x - x.mean())/(x.std() + 1e-4) # 1e-6 to avoid zero division
-        if norm_type == "normalized":
+        if norm_type == "minimized":
+            screen_RGB = minimized(screen_RGB)
+        elif norm_type == "normalized":
             screen_RGB = normalized(screen_RGB)
         elif norm_type == "standardized":
             screen_RGB = normalized(standardized(screen_RGB))
@@ -332,8 +335,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
@@ -349,13 +352,12 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Sigmoid(), 
         )
 
         self.density_net = nn.Sequential(
@@ -368,23 +370,26 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=3,
                 kernel_size=3,
                 up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
         )
 
-        # self.frustum_net = nn.Sequential(
-        #     # DenseNet201(
-        #     #     spatial_dims=2,
-        #     #     in_channels=1,
-        #     #     out_channels=5,
-        #     #     act=("LeakyReLU", {"inplace": True}),
-        #     #     norm=Norm.BATCH,
-        #     #     dropout_prob=0.5,
-        #     #     pretrained=True, 
-        #     # ),
+        self.frustum_net = nn.Sequential(
+            EfficientNetBN(
+                model_name="efficientnet-b8", 
+                spatial_dims=2,
+                in_channels=1, 
+                num_classes=5,
+                pretrained=True, 
+                adv_prop=True,
+            ),
+            nn.Sigmoid()
+        )
+
+        # self.frustum_net_0 = nn.Sequential(
         #     ViT(
         #         in_channels=1, 
         #         img_size=(self.shape, self.shape), 
@@ -396,33 +401,18 @@ class NeRVLightningModule(LightningModule):
         #         post_activation="Tanh", 
         #         dropout_rate=0.5
         #     ),
-        #     # nn.Sigmoid(),
         # )
 
-        self.frustum_net_0 = nn.Sequential(
-            ViT(
-                in_channels=1, 
-                img_size=(self.shape, self.shape), 
-                patch_size=(16, 16),
-                pos_embed='conv', 
-                classification=True, 
-                num_classes=5,  
-                spatial_dims=2, 
-                post_activation="Tanh", 
-                dropout_rate=0.5
-            ),
-        )
-
-        self.frustum_net_1 = nn.Sequential(
-            DenseNet201(
-                spatial_dims=2,
-                in_channels=1,
-                out_channels=5,
-                dropout_prob=0.5,
-                pretrained=True, 
-            ),
-            nn.Tanh(),
-        )
+        # self.frustum_net_1 = nn.Sequential(
+        #     DenseNet201(
+        #         spatial_dims=2,
+        #         in_channels=1,
+        #         out_channels=5,
+        #         dropout_prob=0.5,
+        #         pretrained=True, 
+        #     ),
+        #     nn.Tanh(),
+        # )
 
         self.l1loss = nn.L1Loss(reduction="mean")
         
@@ -475,10 +465,8 @@ class NeRVLightningModule(LightningModule):
         return clarity, density
     
     def forward_frustum(self, image2d: torch.Tensor):
-        # frustum = self.frustum_net(image2d * 2. - 1.)[0] * .5 + .5 
-        frustum_0 = self.frustum_net_0(image2d * 2. - 1.)[0] * .5 + .5 
-        frustum_1 = self.frustum_net_1(image2d * 2. - 1.)[0] * .5 + .5 
-        return 0.5*(frustum_0 + frustum_1)
+        frustum = self.frustum_net(image2d)
+        return frustum 
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
