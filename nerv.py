@@ -340,6 +340,7 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
+            nn.Sigmoid()
         )
 
         self.clarity_net = nn.Sequential(
@@ -358,6 +359,7 @@ class NeRVLightningModule(LightningModule):
                 # mode="pixelshuffle",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
+            nn.Sigmoid()
         )
 
         self.density_net = nn.Sequential(
@@ -375,6 +377,7 @@ class NeRVLightningModule(LightningModule):
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
+            nn.Sigmoid()
         )
 
         self.frustum_net = nn.Sequential(
