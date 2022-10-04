@@ -332,7 +332,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=2, 
                 channels=(64, 128, 256, 512, 1024, 2048), #(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
@@ -350,7 +350,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
@@ -369,7 +369,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=1, 
                 channels=(64, 128, 256, 512, 1024, 2048), #(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=3,
+                num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
@@ -509,9 +509,11 @@ class NeRVLightningModule(LightningModule):
                         torch.cat([orgvol_ct[..., self.shape//2], 
                                    estrad_ct[:, [1], ..., self.shape//2],
                                    estimg_ct,
+                                   estmid_ct[..., self.shape//2],
                                    estvol_ct[..., self.shape//2],
                                    ], dim=-1),
                         torch.cat([orgimg_xr, 
+                                   estmid_xr[..., self.shape//2],
                                    estvol_xr[..., self.shape//2],
                                    estrad_xr[:, [1], ..., self.shape//2],
                                    estimg_xr,
@@ -579,12 +581,12 @@ class NeRVLightningModule(LightningModule):
         #         {'params': self.density_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
         #        torch.optim.RAdam([
         #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        #     optimizer, T_max=10, eta_min=self.lr / 10
-        # )
-        # return [optimizer], [scheduler]
-        return torch.optim.RAdam(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=10, eta_min=self.lr / 10
+        )
+        return [optimizer], [scheduler]
+        # return torch.optim.RAdam(self.parameters(), lr=self.lr)
         
 if __name__ == "__main__":
     parser = ArgumentParser()
