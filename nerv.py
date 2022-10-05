@@ -46,6 +46,76 @@ def _shifted_cumprod(x, shift=1):
     )
     return x_cumprod_shift
 
+def total_variation(img: torch.Tensor, reduction: str = "sum") -> torch.Tensor:
+    r"""Function that computes Total Variation according to [1].
+
+    Args:
+        img: the input image with shape :math:`(*, H, W)`.
+        reduction : Specifies the reduction to apply to the output: ``'mean'`` | ``'sum'``.
+         ``'mean'``: the sum of the output will be divided by the number of elements
+         in the output, ``'sum'``: the output will be summed.
+
+    Return:
+         a tensor with shape :math:`(*,)`.
+
+    Examples:
+        >>> total_variation(torch.ones(4, 4))
+        tensor(0.)
+        >>> total_variation(torch.ones(2, 5, 3, 4, 4)).shape
+        torch.Size([2, 5, 3])
+
+    
+    """
+    
+    pixel_dif0 = img[..., 1:, :, :] - img[..., :-1, :, :]
+    pixel_dif1 = img[..., :, 1:, :] - img[..., :, :-1, :]
+    pixel_dif2 = img[..., :, :, 1:] - img[..., :, :, :-1]
+
+    res0 = pixel_dif0.abs()
+    res1 = pixel_dif1.abs()
+    res2 = pixel_dif2.abs()
+
+    reduce_axes = (-3, -2, -1)
+    if reduction == "mean":
+        if img.is_floating_point():
+            res0 = res0.to(img).mean(dim=reduce_axes)
+            res1 = res1.to(img).mean(dim=reduce_axes)
+            res2 = res2.to(img).mean(dim=reduce_axes)
+        else:
+            res0 = res0.float().mean(dim=reduce_axes)
+            res1 = res1.float().mean(dim=reduce_axes)
+            res2 = res2.float().mean(dim=reduce_axes)
+    elif reduction == "sum":
+        res0 = res0.sum(dim=reduce_axes)
+        res1 = res1.sum(dim=reduce_axes)
+        res2 = res2.sum(dim=reduce_axes)
+
+    return res0 + res1 + res2 
+
+
+
+class TotalVariation(nn.Module):
+    r"""Compute the Total Variation according to [1].
+
+    Shape:
+        - Input: :math:`(*, H, W)`.
+        - Output: :math:`(*,)`.
+
+    Examples:
+        >>> tv = TotalVariation()
+        >>> output = tv(torch.ones((2, 3, 4, 4), requires_grad=True))
+        >>> output.data
+        tensor([[0., 0., 0.],
+                [0., 0., 0.]])
+        >>> output.sum().backward()  # grad can be implicitly created only for scalar outputs
+
+    Reference:
+        [1] https://en.wikipedia.org/wiki/Total_variation
+    """
+
+    def forward(self, img, reduction="mean") -> torch.Tensor:
+        return total_variation(img, reduction=reduction)
+
 class EmissionAbsorptionRaymarcherFrontToBack(EmissionAbsorptionRaymarcher):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -297,6 +367,8 @@ class NeRVLightningModule(LightningModule):
         self.logsdir = hparams.logsdir
         self.lr = hparams.lr
         self.shape = hparams.shape
+        self.alpha = hparams.alpha
+        self.gamma = hparams.gamma
         self.weight_decay = hparams.weight_decay
         self.batch_size = hparams.batch_size
         self.devices = hparams.devices
@@ -418,7 +490,7 @@ class NeRVLightningModule(LightningModule):
         # )
 
         self.l1loss = nn.L1Loss(reduction="mean")
-        
+        self.tvloss = TotalVariation()
 
     def forward(self, image3d):
         pass
@@ -525,10 +597,15 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) # + self.l1loss(orgvol_ct, estmid_ct)
+            im3d_loss = self.l1loss(orgvol_ct, estvol_ct)   \
+                      + self.l1loss(orgvol_ct, estmid_ct)   \
+                      + self.alpha * self.tvloss(estvol_ct) \
+                      + self.alpha * self.tvloss(estmid_ct)      
+                      
             im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
             cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
-            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]])      
+            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
+                      + self.gamma * self.tvloss(estrad_ct[:,[1]])  
         
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
@@ -600,6 +677,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_samples", type=int, default=1000, help="training samples")
     parser.add_argument("--val_samples", type=int, default=400, help="validation samples")
     parser.add_argument("--test_samples", type=int, default=400, help="test samples")
+    parser.add_argument("--alpha", type=float, default=1e3, help="TV term")
+    parser.add_argument("--gamma", type=float, default=1e3, help="TV term")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--lr", type=float, default=1e-4, help="adam: learning rate")
     parser.add_argument("--ckpt", type=str, default=None, help="path to checkpoint")
