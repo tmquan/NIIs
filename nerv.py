@@ -282,7 +282,7 @@ class NeRVDataModule(LightningDataModule):
         self.train_loader = DataLoader(
             self.train_datasets, 
             batch_size=self.batch_size, 
-            num_workers=4, 
+            num_workers=8, 
             collate_fn=list_data_collate,
             shuffle=True,
         )
@@ -421,7 +421,7 @@ class NeRVLightningModule(LightningModule):
                 in_channels=16, #self.shape,
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
-                strides=(2, 2, 2, 2, 2),
+                strides=(1, 1, 1, 1, 1), #(2, 2, 2, 2, 2),
                 num_res_units=4,
                 kernel_size=3,
                 up_kernel_size=3,
@@ -598,14 +598,14 @@ class NeRVLightningModule(LightningModule):
         # Loss
         if self.oneway==1:
             im3d_loss = self.l1loss(orgvol_ct, estvol_ct)   \
-                      + self.l1loss(orgvol_ct, estmid_ct)   \
-                      + self.alpha * self.tvloss(estvol_ct) 
+                      + self.l1loss(orgvol_ct, estmid_ct)   
+                    #   + self.alpha * self.tvloss(estvol_ct) 
                     #   + self.alpha * self.tvloss(estmid_ct)      
                       
             im2d_loss = self.l1loss(orgimg_xr, estimg_xr) 
             cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
-            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) \
-                      + self.gamma * self.tvloss(estrad_ct[:,[1]])  
+            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) 
+                    #   + self.gamma * self.tvloss(estrad_ct[:,[1]])  
         
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
