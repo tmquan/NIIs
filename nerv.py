@@ -422,7 +422,7 @@ class NeRVLightningModule(LightningModule):
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=4,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
