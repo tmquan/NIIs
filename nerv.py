@@ -519,7 +519,7 @@ class NeRVLightningModule(LightningModule):
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (densities * 2. - 1.) * .02 + .08, # Set min and max boundaries of energy of density
+            densities = (densities * 2. - 1.) * .02 + .03, # Set min and max boundaries of energy of density
             voxel_size = 3.2 / self.shape,
         )
                 
