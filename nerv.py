@@ -409,7 +409,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
@@ -422,12 +422,12 @@ class NeRVLightningModule(LightningModule):
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2), #(1, 1, 1, 1, 1), #(2, 2, 2, 2, 2),
-                num_res_units=2,
+                num_res_units=4,
                 kernel_size=3,
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -446,7 +446,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
@@ -515,11 +515,11 @@ class NeRVLightningModule(LightningModule):
                             batch_size=self.batch_size, 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
-                            cam_ft=frustum_feat*2. - 1.)
+                            cam_ft=frustum_feat * 2. - 1.)
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (densities * 2. - 1.) * .01 + .04, # Set min and max boundaries of energy of density
+            densities = (densities * 2. - 1.) * .02 + .08, # Set min and max boundaries of energy of density
             voxel_size = 3.2 / self.shape,
         )
                 
