@@ -360,7 +360,7 @@ cam_mu = {
 }
 cam_bw = {
     "dist": 0.3,
-    "elev": 30., #"elev": 0.,
+    "elev": 90., #"elev": 0.,
     "azim": 180,   #"azim": 0,
     # "fov": 30.,
     # "aspect_ratio": 0.2
