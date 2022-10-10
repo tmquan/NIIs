@@ -72,18 +72,14 @@ from data import *
 # Init random cameras
 # https://github.com/facebookresearch/pytorch3d/blob/main/tests/test_cameras.py
 cam_mu = {
-    "dist": 3.7,
+    "dist": 3.0,
     "elev": 0.0,
     "azim": 0.0,
-    "fov": 60.,
-    "aspect_ratio": 1.0,
 }
 cam_bw = {
     "dist": 0.3,
     "elev": 20.,
     "azim": 20.,
-    "fov": 20.,
-    "aspect_ratio": 0.1
 }
 
 def init_random_cameras(
@@ -106,86 +102,11 @@ def init_random_cameras(
         azim = torch.Tensor(batch_size).uniform_(cam_mu["azim"] - cam_bw["azim"], cam_mu["azim"] + cam_bw["azim"]) if random else cam_mu["azim"]
 
     cam_params = {}
-    # T = torch.randn(batch_size, 3) * 0.03
-    # if not random:
-    #     T[:, 2] = 4
-    # R = so3_exp_map(torch.randn(batch_size, 3) * 3.0)
-
+    
     R, T = look_at_view_transform(dist.float(), elev.float(), azim.float(), degrees=True, device=device)
-    
-    # R = R.to(cam_ft.dtype)
-    # T = T.to(cam_ft.dtype)
-    # camera_position = camera_position_from_spherical_angles(
-    #     dist.float(), 
-    #     elev.float(), 
-    #     azim.float(), 
-    #     degrees=True, 
-    #     device=device
-    # )
-    # dist, elev, azim = broadcasted_args
-    
-    # degrees=True
-    # if degrees:
-    #     elev = math.pi / 180.0 * elev
-    #     azim = math.pi / 180.0 * azim
-    # x = dist * torch.cos(elev) * torch.sin(azim)
-    # y = dist * torch.sin(elev)
-    # z = dist * torch.cos(elev) * torch.cos(azim)
-    # camera_position = torch.stack([x, y, z], dim=1).float().to(device)
-    # if camera_position.dim() == 0:
-    #     camera_position = camera_position.view(1, -1)  # add batch dim.
-    # # print(cam_ft.shape)
-    # # print(dist.shape, elev.shape, azim.shape)
-    # # print(x.shape, y.shape, y.shape)
-    # # print(camera_position.shape)
-    # R = look_at_rotation(camera_position, device=device)  # (1, 3, 3)
-    # T = -torch.bmm(R.transpose(1, 2), camera_position.view(1, 3, -1))[:, :, 0]   # (1, 3)
-
     R = R.float()
     T = T.float()
     cam_params = {"R": R, "T": T}
-    if cam_type in (OpenGLPerspectiveCameras, OpenGLOrthographicCameras):
-        cam_params["znear"] = torch.rand(batch_size) * 10 + 0.1
-        cam_params["zfar"] = torch.rand(batch_size) * 4 + 1 + cam_params["znear"]
-        if cam_type == OpenGLPerspectiveCameras:
-            cam_params["fov"] = torch.rand(batch_size) * 60 + 30
-            cam_params["aspect_ratio"] = torch.rand(batch_size) * 0.5 + 0.5
-        else:
-            cam_params["top"] = torch.rand(batch_size) * 0.2 + 0.9
-            cam_params["bottom"] = -(torch.rand(batch_size)) * 0.2 - 0.9
-            cam_params["left"] = -(torch.rand(batch_size)) * 0.2 - 0.9
-            cam_params["right"] = torch.rand(batch_size) * 0.2 + 0.9
-    elif cam_type in (FoVPerspectiveCameras, FoVOrthographicCameras):
-        # cam_params["znear"] = torch.rand(batch_size) * 10 + 0.1
-        # cam_params["zfar"] = torch.rand(batch_size) * 4 + 1 + cam_params["znear"]
-        cam_params["znear"] = torch.ones(batch_size) * .01 #torch.rand(batch_size) * 10 + 0.1
-        cam_params["zfar"] = torch.ones(batch_size) * 3.5 #torch.rand(batch_size) * 4 + 1 + cam_params["znear"]
-        
-        if cam_type == FoVPerspectiveCameras:
-            # cam_params["fov"] = torch.rand(batch_size) * 60 + 30
-            if cam_ft is not None:
-                assert cam_ft.shape[0] == batch_size
-                cam_params["fov"] = cam_ft[:, 3] * cam_bw["fov"] + cam_mu["fov"]
-                cam_params["aspect_ratio"] = cam_ft[:, 4] * cam_bw["aspect_ratio"] + cam_mu["aspect_ratio"]
-            else:
-                cam_params["fov"] = torch.Tensor(batch_size).uniform_(cam_mu["fov"] - cam_bw["fov"], cam_mu["fov"] + cam_bw["fov"]) if random else cam_mu["fov"]
-                cam_params["aspect_ratio"] = torch.Tensor(batch_size).uniform_(cam_mu["aspect_ratio"] - cam_bw["aspect_ratio"], cam_mu["aspect_ratio"] + cam_bw["aspect_ratio"]) if random else cam_mu["aspect_ratio"]    
-        else:
-            cam_params["max_y"] = torch.rand(batch_size) * 0.2 + 0.9
-            cam_params["min_y"] = -(torch.rand(batch_size)) * 0.2 - 0.9
-            cam_params["min_x"] = -(torch.rand(batch_size)) * 0.2 - 0.9
-            cam_params["max_x"] = torch.rand(batch_size) * 0.2 + 0.9
-    elif cam_type in (
-        SfMOrthographicCameras,
-        SfMPerspectiveCameras,
-        OrthographicCameras,
-        PerspectiveCameras,
-    ):
-        cam_params["focal_length"] = torch.rand(batch_size) * 10 + 0.1
-        cam_params["principal_point"] = torch.randn((batch_size, 2))
-
-    else:
-        raise ValueError(str(cam_type))
     return cam_type(**cam_params)
 
 def get_emb(sin_inp):

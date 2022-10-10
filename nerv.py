@@ -353,15 +353,15 @@ cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
     "azim": 0.0,
-    "fov": 60.,
-    "aspect_ratio": 1.0,
+    # "fov": 60.,
+    # "aspect_ratio": 1.0,
 }
 cam_bw = {
-    "dist": 0.4,
+    "dist": 0.3,
     "elev": 30.,
     "azim": 30.,
-    "fov": 30.,
-    "aspect_ratio": 0.2
+    # "fov": 30.,
+    # "aspect_ratio": 0.2
 }
 
 # NeRPLightningModule
@@ -384,7 +384,7 @@ class NeRVLightningModule(LightningModule):
             image_height = self.shape,
             n_pts_per_ray = 512, #self.shape,
             min_depth = 0.001,
-            max_depth = 4.5,
+            max_depth = 3.0,
         )
 
         # self.raymarcher = EmissionAbsorptionRaymarcher()
@@ -406,7 +406,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
-                channels=(64, 128, 256, 512, 1024, 2048), #(64, 128, 256, 512, 1024, 2048), #(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
+                channels=(64, 128, 256, 512, 1024, 2048), 
                 strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -422,10 +422,10 @@ class NeRVLightningModule(LightningModule):
         self.clarity_net = nn.Sequential(
             UNet(
                 spatial_dims=2,
-                in_channels=16, #self.shape,
+                in_channels=64, 
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024, 2048),
-                strides=(2, 2, 2, 2, 2), #(1, 1, 1, 1, 1), #(2, 2, 2, 2, 2),
+                strides=(2, 2, 2, 2, 2),
                 num_res_units=4,
                 kernel_size=3,
                 up_kernel_size=3,
@@ -443,7 +443,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(64, 128, 256, 512, 1024, 2048), #(64, 128, 256, 512, 1024, 2048), #(48, 96, 192, 384, 768, 1024), #(32, 64, 128, 256, 512),
+                channels=(64, 128, 256, 512, 1024, 2048),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -461,39 +461,15 @@ class NeRVLightningModule(LightningModule):
                 model_name="efficientnet-b8", 
                 spatial_dims=2,
                 in_channels=1, 
-                num_classes=5,
+                num_classes=3,
                 pretrained=True, 
                 adv_prop=True,
             ),
             nn.Sigmoid()
         )
 
-        # self.frustum_net_0 = nn.Sequential(
-        #     ViT(
-        #         in_channels=1, 
-        #         img_size=(self.shape, self.shape), 
-        #         patch_size=(16, 16),
-        #         pos_embed='conv', 
-        #         classification=True, 
-        #         num_classes=5,  
-        #         spatial_dims=2, 
-        #         post_activation="Tanh", 
-        #         dropout_rate=0.5
-        #     ),
-        # )
-
-        # self.frustum_net_1 = nn.Sequential(
-        #     DenseNet201(
-        #         spatial_dims=2,
-        #         in_channels=1,
-        #         out_channels=5,
-        #         dropout_prob=0.5,
-        #         pretrained=True, 
-        #     ),
-        #     nn.Tanh(),
-        # )
-
         self.l1loss = nn.L1Loss(reduction="mean")
+        self.hbloss = nn.HuberLoss(reduction="mean")
         self.tvloss = TotalVariation()
 
     def forward(self, image3d):
@@ -524,7 +500,7 @@ class NeRVLightningModule(LightningModule):
         volumes = Volumes(
             features = features, 
             densities = (densities * 2. - 1.) * .02 + .03, # Set min and max boundaries of energy of density
-            voxel_size = 3.2 / self.shape,
+            voxel_size = 3.0 / self.shape,
         )
                 
         pictures = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type)
@@ -532,8 +508,8 @@ class NeRVLightningModule(LightningModule):
 
     def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         # with torch.no_grad():
-        zeros_tensor = torch.zeros(self.batch_size, 10, self.shape, self.shape)
-        pos_encoding = PositionalEncodingPermute2D(10)(zeros_tensor)
+        zeros_tensor = torch.zeros(self.batch_size, 60, self.shape, self.shape)
+        pos_encoding = PositionalEncodingPermute2D(60)(zeros_tensor)
         cat_features = torch.cat([image2d, 
                                   pos_encoding.to(image2d.device),
                                   frustum_feat.view(frustum_feat.shape[0], 
@@ -552,7 +528,7 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         # with torch.no_grad():
-        orgcam_ct = torch.rand(self.batch_size, 5, device=_device)
+        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
 
         # if stage=='train':
         #     if (batch_idx % 4) == 1:
