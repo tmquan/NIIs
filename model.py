@@ -94,8 +94,8 @@ def init_random_cameras(
     if cam_ft is not None:
         assert cam_ft.shape[0] == batch_size
         dist = cam_ft[:, 0] * cam_bw["dist"] + cam_mu["dist"]
-        elev = cam_ft[:, 1] * cam_bw["elev"] + cam_mu["elev"] + 180.0 
-        azim = cam_ft[:, 2] * cam_bw["azim"] + cam_mu["azim"]
+        elev = cam_ft[:, 1] * cam_bw["elev"] + cam_mu["elev"] 
+        azim = cam_ft[:, 2] * cam_bw["azim"] + cam_mu["azim"] 
     else:
         dist = torch.Tensor(batch_size).uniform_(cam_mu["dist"] - cam_bw["dist"], cam_mu["dist"] + cam_bw["dist"]) if random else cam_mu["dist"]
         elev = torch.Tensor(batch_size).uniform_(cam_mu["elev"] - cam_bw["elev"], cam_mu["elev"] + cam_bw["elev"]) if random else cam_mu["elev"]
