@@ -74,12 +74,16 @@ from data import *
 cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
-    "azim": 0.0,
+    "azim": 180,
+    # "fov": 60.,
+    # "aspect_ratio": 1.0,
 }
 cam_bw = {
     "dist": 0.3,
-    "elev": 20.,
-    "azim": 20.,
+    "elev": 90., #"elev": 0.,
+    "azim": 180,   #"azim": 0,
+    # "fov": 30.,
+    # "aspect_ratio": 0.2
 }
 
 def init_random_cameras(
