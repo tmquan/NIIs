@@ -404,16 +404,17 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            AttentionUnet(
+            Unet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
                 channels=(64, 128, 256, 512, 1024), 
-                strides= (2, 2, 2, 2), #(2, 2, 2, 2),
-                kernel_size=3,
-                up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                strides=(2, 2, 2, 2), #(2, 2, 2, 2),
+                kernel_size=5,
+                up_kernel_size=5,
+                # num_res_units=2, 
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
@@ -421,16 +422,17 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.clarity_net = nn.Sequential(
-            AttentionUnet(
+            Unet(
                 spatial_dims=2,
                 in_channels=4, 
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2),
-                kernel_size=3,
-                up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                kernel_size=5,
+                up_kernel_size=5,
+                num_res_units=2, 
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
@@ -439,16 +441,17 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.density_net = nn.Sequential(
-            AttentionUnet(
+            Unet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
                 channels=(64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2),
-                kernel_size=3,
-                up_kernel_size=3,
-                # act=("LeakyReLU", {"inplace": True}),
-                # norm=Norm.BATCH,
+                kernel_size=5,
+                up_kernel_size=5,
+                # num_res_units=2, 
+                act=("LeakyReLU", {"inplace": True}),
+                norm=Norm.BATCH,
                 # dropout=0.5,
                 # mode="pixelshuffle",
             ), 
@@ -457,7 +460,7 @@ class NeRVLightningModule(LightningModule):
 
         self.frustum_net = nn.Sequential(
             EfficientNetBN(
-                model_name="efficientnet-b7", 
+                model_name="efficientnet-b8", 
                 spatial_dims=2,
                 in_channels=1, 
                 num_classes=3,
