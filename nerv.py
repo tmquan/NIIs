@@ -404,90 +404,60 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            # UNet(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=2, 
-            #     channels=(64, 128, 256, 512, 1024), 
-            #     strides= (2, 2, 2, 2), #(2, 2, 2, 2),
-            #     num_res_units=2,
-            #     kernel_size=3,
-            #     up_kernel_size=3,
-            #     act=("LeakyReLU", {"inplace": True}),
-            #     # norm=Norm.BATCH,
-            #     # dropout=0.5,
-            #     # mode="pixelshuffle",
-            # ), 
-            FlexibleUNet(
+            AttentionUnet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
-                backbone="efficientnet-b8",
-                # decoder_channels=(256, 128, 64, 32, 16),
-                act=("LeakyReLU", {"inplace": True}), 
-                # upsample="pixelshuffle",
-            ),
+                channels=(64, 128, 256, 512, 1024), 
+                strides= (2, 2, 2, 2), #(2, 2, 2, 2),
+                kernel_size=3,
+                up_kernel_size=3,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
+                # mode="pixelshuffle",
+            ), 
             nn.Sigmoid()
         )
 
         self.clarity_net = nn.Sequential(
-            # UNet(
-            #     spatial_dims=2,
-            #     in_channels=4, 
-            #     out_channels=self.shape,
-            #     channels=(64, 128, 256, 512, 1024),
-            #     strides=(2, 2, 2, 2),
-            #     num_res_units=2,
-            #     kernel_size=3,
-            #     up_kernel_size=3,
-            #     act=("LeakyReLU", {"inplace": True}),
-            #     # norm=Norm.BATCH,
-            #     # dropout=0.5,
-            #     # mode="pixelshuffle",
-            # ), 
-            FlexibleUNet(
+            AttentionUnet(
                 spatial_dims=2,
-                in_channels=4,
-                out_channels=self.shape, 
-                backbone="efficientnet-b8",
-                # decoder_channels=(256, 128, 64, 32, 16),
-                act=("LeakyReLU", {"inplace": True}), 
-                # upsample="pixelshuffle",
-            ),
+                in_channels=4, 
+                out_channels=self.shape,
+                channels=(64, 128, 256, 512, 1024),
+                strides=(2, 2, 2, 2),
+                kernel_size=3,
+                up_kernel_size=3,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
+                # mode="pixelshuffle",
+            ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
             nn.Sigmoid()
         )
 
         self.density_net = nn.Sequential(
-            # UNet(
-            #     spatial_dims=3,
-            #     in_channels=1,
-            #     out_channels=1, 
-            #     channels=(64, 128, 256, 512, 1024),
-            #     strides=(2, 2, 2, 2),
-            #     num_res_units=2,
-            #     kernel_size=3,
-            #     up_kernel_size=3,
-            #     act=("LeakyReLU", {"inplace": True}),
-            #     # norm=Norm.BATCH,
-            #     # dropout=0.5,
-            #     # mode="pixelshuffle",
-            # ), 
-            FlexibleUNet(
+            AttentionUnet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                backbone="efficientnet-b8",
-                # decoder_channels=(256, 128, 64, 32, 16),
-                act=("LeakyReLU", {"inplace": True}), 
-                # upsample="pixelshuffle",
-            ),
+                channels=(64, 128, 256, 512, 1024),
+                strides=(2, 2, 2, 2),
+                kernel_size=3,
+                up_kernel_size=3,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
+                # mode="pixelshuffle",
+            ), 
             nn.Sigmoid()
         )
 
         self.frustum_net = nn.Sequential(
             EfficientNetBN(
-                model_name="efficientnet-b8", 
+                model_name="efficientnet-b7", 
                 spatial_dims=2,
                 in_channels=1, 
                 num_classes=3,
