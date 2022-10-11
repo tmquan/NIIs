@@ -384,8 +384,8 @@ class NeRVLightningModule(LightningModule):
         raysampler = NDCMultinomialRaysampler( #NDCGridRaysampler(
             image_width = self.shape,
             image_height = self.shape,
-            n_pts_per_ray = 512, #self.shape,
-            min_depth = 0.001,
+            n_pts_per_ray = 400, #self.shape,
+            min_depth = 0.1,
             max_depth = 3.0,
         )
 
@@ -430,7 +430,7 @@ class NeRVLightningModule(LightningModule):
                 strides=(2, 2, 2, 2),
                 kernel_size=5,
                 up_kernel_size=5,
-                num_res_units=2, 
+                num_res_units=3, 
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
                 # dropout=0.5,
@@ -543,16 +543,16 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
 
-        # if stage=='train':
-        #     if (batch_idx % 4) == 1:
-        #         orgvol_ct = torch.rand_like(orgvol_ct)
-        #     elif (batch_idx % 4) == 2:
-        #         # Calculate interpolation
-        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-        #         vol3d = orgvol_ct.detach().clone()
-        #         noise = torch.rand_like(vol3d)
-        #         alpha = alpha.expand_as(vol3d)
-        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        if stage=='train':
+            if (batch_idx % 4) == 2:
+                orgvol_ct = torch.rand_like(orgvol_ct)
+            elif (batch_idx % 4) == 3:
+                # Calculate interpolation
+                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+                vol3d = orgvol_ct.detach().clone()
+                noise = torch.rand_like(vol3d)
+                alpha = alpha.expand_as(vol3d)
+                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
@@ -708,9 +708,8 @@ if __name__ == "__main__":
             lr_callback,
             checkpoint_callback, 
         ],
-        # accumulate_grad_batches=4, 
-        # strategy=DDPStrategy(static_graph=True),
-        strategy="ddp_sharded", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
+        accumulate_grad_batches=4, 
+        strategy="fsdp", #"fsdp", #"ddp_sharded", #"horovod", #"deepspeed", #"ddp_sharded",
         precision=16,  #if hparams.use_amp else 32,
         # amp_backend='apex',
         # amp_level='O1', # see https://nvidia.github.io/apex/amp.html#opt-levels
