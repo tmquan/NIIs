@@ -46,76 +46,6 @@ def _shifted_cumprod(x, shift=1):
     )
     return x_cumprod_shift
 
-def total_variation(img: torch.Tensor, reduction: str = "sum") -> torch.Tensor:
-    r"""Function that computes Total Variation according to [1].
-
-    Args:
-        img: the input image with shape :math:`(*, H, W)`.
-        reduction : Specifies the reduction to apply to the output: ``'mean'`` | ``'sum'``.
-         ``'mean'``: the sum of the output will be divided by the number of elements
-         in the output, ``'sum'``: the output will be summed.
-
-    Return:
-         a tensor with shape :math:`(*,)`.
-
-    Examples:
-        >>> total_variation(torch.ones(4, 4))
-        tensor(0.)
-        >>> total_variation(torch.ones(2, 5, 3, 4, 4)).shape
-        torch.Size([2, 5, 3])
-
-    
-    """
-    
-    pixel_dif0 = img[..., 1:, :, :] - img[..., :-1, :, :]
-    pixel_dif1 = img[..., :, 1:, :] - img[..., :, :-1, :]
-    pixel_dif2 = img[..., :, :, 1:] - img[..., :, :, :-1]
-
-    res0 = pixel_dif0.abs()
-    res1 = pixel_dif1.abs()
-    res2 = pixel_dif2.abs()
-
-    reduce_axes = (-3, -2, -1)
-    if reduction == "mean":
-        if img.is_floating_point():
-            res0 = res0.to(img).mean(dim=reduce_axes)
-            res1 = res1.to(img).mean(dim=reduce_axes)
-            res2 = res2.to(img).mean(dim=reduce_axes)
-        else:
-            res0 = res0.float().mean(dim=reduce_axes)
-            res1 = res1.float().mean(dim=reduce_axes)
-            res2 = res2.float().mean(dim=reduce_axes)
-    elif reduction == "sum":
-        res0 = res0.sum(dim=reduce_axes)
-        res1 = res1.sum(dim=reduce_axes)
-        res2 = res2.sum(dim=reduce_axes)
-
-    return res0 + res1 + res2 
-
-
-
-class TotalVariation(nn.Module):
-    r"""Compute the Total Variation according to [1].
-
-    Shape:
-        - Input: :math:`(*, H, W)`.
-        - Output: :math:`(*,)`.
-
-    Examples:
-        >>> tv = TotalVariation()
-        >>> output = tv(torch.ones((2, 3, 4, 4), requires_grad=True))
-        >>> output.data
-        tensor([[0., 0., 0.],
-                [0., 0., 0.]])
-        >>> output.sum().backward()  # grad can be implicitly created only for scalar outputs
-
-    Reference:
-        [1] https://en.wikipedia.org/wiki/Total_variation
-    """
-
-    def forward(self, img, reduction="mean") -> torch.Tensor:
-        return total_variation(img, reduction=reduction)
-
 class EmissionAbsorptionRaymarcherFrontToBack(EmissionAbsorptionRaymarcher):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -355,15 +285,18 @@ cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
     "azim": 180,
-    # "fov": 60.,
-    # "aspect_ratio": 1.0,
 }
 cam_bw = {
     "dist": 0.3,
     "elev": 90., #"elev": 0.,
     "azim": 180,   #"azim": 0,
-    # "fov": 30.,
-    # "aspect_ratio": 0.2
+}
+
+rad_mu = {
+    "beta": 0.01,
+}
+rad_bw = {
+    "beta": 0.01,
 }
 
 # NeRPLightningModule
@@ -512,7 +445,7 @@ class NeRVLightningModule(LightningModule):
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (densities * 2. - 1.) * .02 + .03, # Set min and max boundaries of energy of density
+            densities = (densities * 2. - 1.) * rad_bw["beta"] + rad_mu["beta"], # Set min and max boundaries of energy of density
             voxel_size = 3.0 / self.shape,
         )
                 
