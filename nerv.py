@@ -404,57 +404,84 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            UNet(
+            # UNet(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=2, 
+            #     channels=(64, 128, 256, 512, 1024), 
+            #     strides= (2, 2, 2, 2), #(2, 2, 2, 2),
+            #     num_res_units=2,
+            #     kernel_size=3,
+            #     up_kernel_size=3,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     # norm=Norm.BATCH,
+            #     # dropout=0.5,
+            #     # mode="pixelshuffle",
+            # ), 
+            FlexibleUNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
-                channels=(64, 128, 256, 512, 1024, 2048), 
-                strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
-                num_res_units=2,
-                kernel_size=3,
-                up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="pixelshuffle",
-            ), 
+                backbone="efficientnet-b8",
+                # decoder_channels=(256, 128, 64, 32, 16),
+                act=("LeakyReLU", {"inplace": True}), 
+                # upsample="pixelshuffle",
+            ),
             nn.Sigmoid()
         )
 
         self.clarity_net = nn.Sequential(
-            UNet(
+            # UNet(
+            #     spatial_dims=2,
+            #     in_channels=4, 
+            #     out_channels=self.shape,
+            #     channels=(64, 128, 256, 512, 1024),
+            #     strides=(2, 2, 2, 2),
+            #     num_res_units=2,
+            #     kernel_size=3,
+            #     up_kernel_size=3,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     # norm=Norm.BATCH,
+            #     # dropout=0.5,
+            #     # mode="pixelshuffle",
+            # ), 
+            FlexibleUNet(
                 spatial_dims=2,
-                in_channels=4, 
-                out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 2048),
-                strides=(2, 2, 2, 2, 2),
-                num_res_units=4,
-                kernel_size=3,
-                up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="pixelshuffle",
-            ), 
+                in_channels=4,
+                out_channels=self.shape, 
+                backbone="efficientnet-b8",
+                # decoder_channels=(256, 128, 64, 32, 16),
+                act=("LeakyReLU", {"inplace": True}), 
+                # upsample="pixelshuffle",
+            ),
             Reshape(*[1, self.shape, self.shape, self.shape]),
             nn.Sigmoid()
         )
 
         self.density_net = nn.Sequential(
-            UNet(
+            # UNet(
+            #     spatial_dims=3,
+            #     in_channels=1,
+            #     out_channels=1, 
+            #     channels=(64, 128, 256, 512, 1024),
+            #     strides=(2, 2, 2, 2),
+            #     num_res_units=2,
+            #     kernel_size=3,
+            #     up_kernel_size=3,
+            #     act=("LeakyReLU", {"inplace": True}),
+            #     # norm=Norm.BATCH,
+            #     # dropout=0.5,
+            #     # mode="pixelshuffle",
+            # ), 
+            FlexibleUNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(64, 128, 256, 512, 1024, 2048),
-                strides=(2, 2, 2, 2, 2),
-                num_res_units=2,
-                kernel_size=3,
-                up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                # dropout=0.5,
-                # mode="pixelshuffle",
-            ), 
+                backbone="efficientnet-b8",
+                # decoder_channels=(256, 128, 64, 32, 16),
+                act=("LeakyReLU", {"inplace": True}), 
+                # upsample="pixelshuffle",
+            ),
             nn.Sigmoid()
         )
 
@@ -470,9 +497,20 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
 
+        # self.frustum_net = nn.Sequential(
+        #     DenseNet201(
+        #         spatial_dims=2,
+        #         in_channels=1,
+        #         out_channels=3,
+        #         # dropout_prob=0.5,
+        #         pretrained=True, 
+        #     ),
+        #     nn.Sigmoid()
+        # )
+
         self.l1loss = nn.L1Loss(reduction="mean")
-        self.hbloss = nn.HuberLoss(reduction="mean")
-        self.tvloss = TotalVariation()
+        # self.hbloss = nn.HuberLoss(reduction="mean")
+        # self.tvloss = TotalVariation()
 
     def forward(self, image3d):
         pass
