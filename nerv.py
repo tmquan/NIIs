@@ -254,7 +254,7 @@ class NeRVDataModule(LightningDataModule):
                 CropForegroundd(keys=["image2d"], source_key="image2d", select_fn=(lambda x: x>0), margin=0),
                 # RandZoomd(keys=["image3d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["trilinear"], align_corners=True), 
                 # RandZoomd(keys=["image2d"], prob=1.0, min_zoom=0.9, max_zoom=1.0, padding_mode='constant', mode=["area"]), 
-                # RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1),
+                RandFlipd(keys=["image2d"], prob=1.0, spatial_axis=1),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=0),
                 # RandFlipd(keys=["image3d"], prob=0.5, spatial_axis=1),
 
