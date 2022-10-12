@@ -337,36 +337,36 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            Unet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
-                channels=(64, 128, 256, 512, 1024), 
-                strides=(2, 2, 2, 2), #(2, 2, 2, 2),
-                kernel_size=5,
-                up_kernel_size=5,
-                # num_res_units=2, 
+                channels=(64, 128, 256, 512, 1024, 2048), 
+                strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
+                num_res_units=2,
+                kernel_size=3,
+                up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
         )
 
         self.clarity_net = nn.Sequential(
-            Unet(
+            UNet(
                 spatial_dims=2,
                 in_channels=4, 
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024),
-                strides=(2, 2, 2, 2),
-                kernel_size=5,
-                up_kernel_size=5,
-                num_res_units=3, 
+                channels=(64, 128, 256, 512, 1024, 2048),
+                strides=(2, 2, 2, 2, 2),
+                num_res_units=4,
+                kernel_size=3,
+                up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -374,18 +374,18 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.density_net = nn.Sequential(
-            Unet(
+            UNet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(64, 128, 256, 512, 1024),
-                strides=(2, 2, 2, 2),
-                kernel_size=5,
-                up_kernel_size=5,
-                # num_res_units=2, 
+                channels=(64, 128, 256, 512, 1024, 2048),
+                strides=(2, 2, 2, 2, 2),
+                num_res_units=2,
+                kernel_size=3,
+                up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
@@ -476,16 +476,16 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
 
-        if stage=='train':
-            if (batch_idx % 4) == 2:
-                orgvol_ct = torch.rand_like(orgvol_ct)
-            elif (batch_idx % 4) == 3:
-                # Calculate interpolation
-                alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
-                vol3d = orgvol_ct.detach().clone()
-                noise = torch.rand_like(vol3d)
-                alpha = alpha.expand_as(vol3d)
-                orgvol_ct = alpha * vol3d + (1 - alpha) * noise
+        # if stage=='train':
+        #     if (batch_idx % 4) == 2:
+        #         orgvol_ct = torch.rand_like(orgvol_ct)
+        #     elif (batch_idx % 4) == 3:
+        #         # Calculate interpolation
+        #         alpha = torch.rand(self.batch_size, 1, 1, 1, 1, device=_device)
+        #         vol3d = orgvol_ct.detach().clone()
+        #         noise = torch.rand_like(vol3d)
+        #         alpha = alpha.expand_as(vol3d)
+        #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
         # XR path
