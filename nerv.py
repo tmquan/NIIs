@@ -530,13 +530,13 @@ class NeRVLightningModule(LightningModule):
                                    estvol_xr[..., self.shape//2, :],
                                    estrad_xr[..., self.shape//2, :],
                                    estimg_xr,
-                                #    recvol_xr[..., self.shape//2, :], 
+                                   recimg_ct
                                    ], dim=-1),
                         torch.cat([orgvol_ct[..., self.shape//2, :], 
                                    estrad_ct[..., self.shape//2, :],
                                    estimg_ct,
                                    estvol_ct[..., self.shape//2, :], 
-                                #    recimg_ct
+                                   recrad_ct[..., self.shape//2, :], 
                                    ], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
