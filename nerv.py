@@ -169,13 +169,13 @@ class NeRVDataModule(LightningDataModule):
                 ),
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
                 OneOf([
-                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                            a_min=-200, 
-                            a_max=1500,
-                            b_min=0.0,
-                            b_max=1.0),
+                    # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                    #         a_min=-200, 
+                    #         a_max=1500,
+                    #         b_min=0.0,
+                    #         b_max=1.0),
                     ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                            a_min=-500, #-200, 
+                            a_min=-512, #-200, 
                             a_max=3071, #1500,
                             b_min=0.0,
                             b_max=1.0),
@@ -243,13 +243,13 @@ class NeRVDataModule(LightningDataModule):
                 ), 
                 ScaleIntensityd(keys=["image2d"], minv=0.0, maxv=1.0,),
                 OneOf([
-                    ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
-                            a_min=-200, 
-                            a_max=1500,
-                            b_min=0.0,
-                            b_max=1.0),
+                    # ScaleIntensityRanged(keys=["image3d"], clip=True,  # CTXR range
+                    #         a_min=-200, 
+                    #         a_max=1500,
+                    #         b_min=0.0,
+                    #         b_max=1.0),
                     ScaleIntensityRanged(keys=["image3d"], clip=True,  # Full range
-                            a_min=-500, #-200, 
+                            a_min=-512, #-200, 
                             a_max=3071, #1500,
                             b_min=0.0,
                             b_max=1.0),
