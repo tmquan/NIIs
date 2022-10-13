@@ -340,7 +340,7 @@ class NeRVLightningModule(LightningModule):
             UNet(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=2, 
+                out_channels=1, 
                 channels=(64, 128, 256, 512, 1024, 2048), 
                 strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
                 num_res_units=2,
@@ -348,7 +348,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
@@ -366,7 +366,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="pixelshuffle",
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -385,7 +385,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 dropout=0.5,
-                # norm=Norm.BATCH,
+                norm=Norm.BATCH,
                 # mode="pixelshuffle",
             ), 
             nn.Sigmoid()
@@ -420,39 +420,44 @@ class NeRVLightningModule(LightningModule):
 
     def forward(self, image3d):
         pass
+    
+    def forward_opacity(
+        self, 
+        image3d: torch.Tensor, 
+        opacities: str= 'stochastic'
+    ) -> torch.Tensor:
+        if opacities=='stochastic':
+            return self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
+        elif opacities=='deterministic':
+            return self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
+        elif opacities=='constant':
+            return torch.ones_like(image3d)
 
-    def forward_picture(self, image3d: torch.Tensor, frustum_feat: torch.Tensor, 
-        opacities: str= 'stochastic',
+    def forward_picture(self, 
+        image3d: torch.Tensor, 
+        density: torch.Tensor,
+        frustum_feat: torch.Tensor, 
         norm_type: str="normalized"
     ) -> torch.Tensor:
-        # features = image3d.repeat(1, 3, 1, 1, 1)
-        if opacities=='stochastic':
-            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5 #+ torch.randn_like(image3d)
-        elif opacities=='deterministic':
-            radiances = self.opacity_net(image3d) # * 2. - 1.) * .5 + .5
-        elif opacities=='constant':
-            radiances = torch.ones_like(image3d)
-
         features = image3d.repeat(1, 3, 1, 1, 1)
-        # features = radiances[:,[0]].repeat(1, 3, 1, 1, 1)
-        densities = radiances[:,[1]]
+        # densities = density
         # with torch.no_grad():
         frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
-                            batch_size=self.batch_size, 
+                            batch_size=image3d.shape[0], 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
                             cam_ft=frustum_feat * 2. - 1.)
         frustums.to(device=image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (densities * 2. - 1.) * rad_bw["beta"] + rad_mu["beta"], # Set min and max boundaries of energy of density
+            densities = (density * 2. - 1.) * rad_bw["beta"] + rad_mu["beta"], # Set min and max boundaries of energy of density
             voxel_size = 3.0 / self.shape,
         )
                 
         pictures = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type)
-        return pictures, radiances
+        return pictures
 
-    def forward_density(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
+    def forward_feature(self, image2d: torch.Tensor, frustum_feat: torch.Tensor):
         # with torch.no_grad():
         # zeros_tensor = torch.zeros(self.batch_size, 60, self.shape, self.shape)
         # pos_encoding = PositionalEncodingPermute2D(60)(zeros_tensor)
@@ -463,7 +468,7 @@ class NeRVLightningModule(LightningModule):
         
         clarity = self.clarity_net(cat_features) # * 2. - 1.) * .5 + .5
         density = self.density_net(clarity) # * 2. - 1.) * .5 + .5
-        return clarity, density
+        return (clarity + density)/2.0
     
     def forward_frustum(self, image2d: torch.Tensor):
         frustum = self.frustum_net(image2d)
@@ -488,33 +493,50 @@ class NeRVLightningModule(LightningModule):
         #         orgvol_ct = alpha * vol3d + (1 - alpha) * noise
         
          
-        # XR path
-        orgcam_xr = self.forward_frustum(orgimg_xr)
-        estmid_xr, estvol_xr = self.forward_density(orgimg_xr, orgcam_xr)
-        estimg_xr, estrad_xr = self.forward_picture(estvol_xr, orgcam_xr, opacities='stochastic', norm_type='normalized')
-        # reccam_xr = self.forward_frustum(estimg_xr)
-        # recmid_xr, recvol_xr = self.forward_density(estimg_xr, reccam_xr)
-        # recimg_xr, recrad_xr = self.forward_picture(recvol_xr, reccam_xr, opacities='stochastic', norm_type='normalized')
+        # # XR path
+        # estcam_xr = self.forward_frustum(orgimg_xr)
+        # estvol_xr = self.forward_feature(orgimg_xr, estcam_xr)
+        # estrad_xr = self.forward_opacity(estvol_xr)
+        # estimg_xr = self.forward_picture(estvol_xr, estrad_xr, estcam_xr)
+        # # reccam_xr = self.forward_frustum(estimg_xr)
+        # # recvol_xr = self.forward_feature(estimg_xr, reccam_xr)
         
-        # CT path
-        estimg_ct, estrad_ct = self.forward_picture(orgvol_ct, orgcam_ct, opacities='stochastic', norm_type='normalized')
-        estcam_ct = self.forward_frustum(estimg_ct)
-        estmid_ct, estvol_ct = self.forward_density(estimg_ct, estcam_ct)
-        recimg_ct, recrad_ct = self.forward_picture(estvol_ct, estcam_ct, opacities='stochastic', norm_type='normalized')
+        # # CT path
+        # estrad_ct = self.forward_opacity(orgvol_ct)
+        # estimg_ct = self.forward_picture(orgvol_ct, estrad_ct, orgcam_ct)
+        # estcam_ct = self.forward_frustum(estimg_ct)
+        # estvol_ct = self.forward_feature(estimg_ct, estcam_ct)
+        # recrad_ct = self.forward_opacity(estvol_ct)
+        # recimg_ct = self.forward_picture(estvol_ct, recrad_ct, estcam_ct)
+
+        estrad_ct = self.forward_opacity(orgvol_ct)
+        estimg_ct = self.forward_picture(orgvol_ct, estrad_ct, orgcam_ct)
+        
+        orgimg_dx = torch.cat([orgimg_xr, estimg_ct], dim=0)
+        
+        estcam_dx = self.forward_frustum(orgimg_dx)
+        estvol_dx = self.forward_feature(orgimg_dx, estcam_dx)
+        estrad_dx = self.forward_opacity(estvol_dx)
+        estimg_dx = self.forward_picture(estvol_dx, estrad_dx, estcam_dx)
+
+        estcam_xr, estcam_ct = estcam_dx[[0]], estcam_dx[[1]]
+        estvol_xr, estvol_ct = estvol_dx[[0]], estvol_dx[[1]]
+        estrad_xr, recrad_ct = estrad_dx[[0]], estrad_dx[[1]]
+        estimg_xr, recimg_ct = estimg_dx[[0]], estimg_dx[[1]]
         
         if batch_idx == 0:
             viz2d = torch.cat([
-                        torch.cat([orgvol_ct[..., self.shape//2, :], 
-                                   estrad_ct[:, [1], ..., self.shape//2, :],
-                                   estimg_ct,
-                                   estmid_ct[..., self.shape//2, :],
-                                   estvol_ct[..., self.shape//2, :],
-                                   ], dim=-1),
                         torch.cat([orgimg_xr, 
-                                   estmid_xr[..., self.shape//2, :],
                                    estvol_xr[..., self.shape//2, :],
-                                   estrad_xr[:, [1], ..., self.shape//2, :],
+                                   estrad_xr[..., self.shape//2, :],
                                    estimg_xr,
+                                #    recvol_xr[..., self.shape//2, :], 
+                                   ], dim=-1),
+                        torch.cat([orgvol_ct[..., self.shape//2, :], 
+                                   estrad_ct[..., self.shape//2, :],
+                                   estimg_ct,
+                                   estvol_ct[..., self.shape//2, :], 
+                                #    recimg_ct
                                    ], dim=-1),
                     ], dim=-2)
             grid = torchvision.utils.make_grid(viz2d, normalize=False, scale_each=False, nrow=1, padding=0)
@@ -523,22 +545,18 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) \
-                      + self.l1loss(orgvol_ct, estmid_ct)    
-                      
-            im2d_loss = self.l1loss(orgimg_xr, estimg_xr) \
-                      + self.l1loss(recimg_ct, estimg_ct)  
+            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) * 2    
+            cams_loss = self.l1loss(orgcam_ct, estcam_ct) * 2         
+            im2d_loss = self.l1loss(orgimg_xr, estimg_xr) + self.l1loss(recimg_ct, estimg_ct)  
 
-            cams_loss = self.l1loss(orgcam_ct, estcam_ct) 
-            tran_loss = self.l1loss(orgvol_ct, estrad_ct[:,[0]]) 
-        
-        info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
-        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+            
+        # info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        # self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         
         return info
 
