@@ -479,7 +479,8 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         # with torch.no_grad():
-        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
+        # orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
+        orgcam_ct = torch.clamp(torch.randn(self.batch_size, 3, device=_device) * 0.5 + 0.5, 0.0, 1.0)
 
         # if stage=='train':
         #     if (batch_idx % 4) == 2:
