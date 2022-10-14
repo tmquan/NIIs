@@ -284,7 +284,7 @@ class NeRVDataModule(LightningDataModule):
 cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
-    "azim": 180,
+    "azim": 90,
 }
 cam_bw = {
     "dist": 0.3,
