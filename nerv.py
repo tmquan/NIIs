@@ -284,7 +284,7 @@ class NeRVDataModule(LightningDataModule):
 cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
-    "azim": 90,
+    "azim": 0,
 }
 cam_bw = {
     "dist": 0.3,
@@ -481,7 +481,10 @@ class NeRVLightningModule(LightningModule):
         # with torch.no_grad():
         # orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
         # orgcam_ct = torch.clamp(torch.randn(self.batch_size, 3, device=_device) * 0.5 + 0.5, 0.0, 1.0)
-        orgcam_ct = torch.distributions.uniform.Uniform(0.2, 0.8).sample([self.batch_size, 3]).to(_device) 
+        orgcam_ct = torch.cat([
+                torch.distributions.uniform.Uniform(0.2, 0.8).sample([self.batch_size, 2]).to(_device), 
+                torch.distributions.uniform.Uniform(0.0, 1.0).sample([self.batch_size, 1]).to(_device), 
+            ], dim=-1)
         # if stage=='train':
         #     if (batch_idx % 4) == 2:
         #         orgvol_ct = torch.rand_like(orgvol_ct)
