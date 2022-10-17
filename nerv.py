@@ -391,6 +391,7 @@ class NeRVLightningModule(LightningModule):
         )
         
         self.l1loss = nn.L1Loss(reduction="mean")
+        self.hbloss = nn.HuberLoss(reduction="mean")
 
     def forward(self, image3d):
         pass
@@ -487,9 +488,9 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.l1loss(orgvol_ct, estvol_ct) * 2    
-            cams_loss = self.l1loss(orgcam_ct, estcam_ct) * 2         
-            im2d_loss = self.l1loss(orgimg_xr, estimg_xr) + self.l1loss(recimg_ct, estimg_ct)  
+            im3d_loss = self.hbloss(orgvol_ct, estvol_ct) * 2    
+            cams_loss = self.hbloss(orgcam_ct, estcam_ct) * 2         
+            im2d_loss = self.hbloss(orgimg_xr, estimg_xr) + self.hbloss(recimg_ct, estimg_ct)  
 
             
         # info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
