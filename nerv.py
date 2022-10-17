@@ -5,15 +5,9 @@ from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.callbacks import DeviceStatsMonitor
-from pytorch_lightning.callbacks import ModelSummary
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.seed import seed_everything
-from pytorch_lightning.strategies import DDPStrategy
 
-# from sympy import re
-
-# from torchmetrics.image import LearnedPerceptualImagePatchSimilarity
 import torch
 torch.cuda.empty_cache()
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
@@ -23,10 +17,8 @@ import resource
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (8192, rlimit[1]))
 
-from monai.visualize.img2tensorboard import plot_2d_or_3d_image
 from monai.networks.layers import * #Reshape
 from monai.networks.nets import * #UNet, DenseNet121, Generator
-from monai.losses import DiceLoss
 
 from model import *
 from data import *
@@ -317,7 +309,7 @@ class NeRVLightningModule(LightningModule):
             image_height = self.shape,
             n_pts_per_ray = 400, #self.shape,
             min_depth = 0.1,
-            max_depth = 3.0,
+            max_depth = 4.5,
         )
 
         raymarcher = EmissionAbsorptionRaymarcherFrontToBack() # X-Ray Raymarcher
