@@ -1,6 +1,8 @@
 import os
+import glob
 import warnings
 warnings.filterwarnings("ignore")
+
 from argparse import ArgumentParser
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -390,8 +392,10 @@ class NeRVLightningModule(LightningModule):
             nn.Sigmoid()
         )
         
-        self.l1loss = nn.L1Loss(reduction="mean")
-        self.hbloss = nn.HuberLoss(reduction="mean")
+        # self.l1loss = nn.L1Loss(reduction="mean")
+        # self.hbloss = nn.HuberLoss(reduction="mean")
+        # self.smloss = nn.SmoothL1Loss(reduction="mean", beta=0.1)
+        self.loss = nn.SmoothL1Loss(reduction="mean", beta=0.1)
 
     def forward(self, image3d):
         pass
@@ -488,10 +492,9 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.hbloss(orgvol_ct, estvol_ct) * 2    
-            cams_loss = self.hbloss(orgcam_ct, estcam_ct) * 2         
-            im2d_loss = self.hbloss(orgimg_xr, estimg_xr) + self.hbloss(recimg_ct, estimg_ct)  
-
+            im3d_loss = self.loss(orgvol_ct, estvol_ct) * 2    
+            cams_loss = self.loss(orgcam_ct, estcam_ct) * 2         
+            im2d_loss = self.loss(orgimg_xr, estimg_xr) + self.loss(recimg_ct, estimg_ct)  
             
         # info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
