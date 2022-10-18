@@ -330,7 +330,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=2, 
-                channels=(64, 128, 256, 512, 1024, 2048), 
+                channels=(64, 128, 256, 512, 1024, 1600), 
                 strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -348,7 +348,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=2,
                 in_channels=1, 
                 out_channels=self.shape,
-                channels=(64, 128, 256, 512, 1024, 2048),
+                channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=4,
                 kernel_size=3,
@@ -367,7 +367,7 @@ class NeRVLightningModule(LightningModule):
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
-                channels=(64, 128, 256, 512, 1024, 2048),
+                channels=(64, 128, 256, 512, 1024, 1600),
                 strides=(2, 2, 2, 2, 2),
                 num_res_units=2,
                 kernel_size=3,
@@ -494,7 +494,7 @@ class NeRVLightningModule(LightningModule):
         if self.oneway==1:
             im3d_loss = self.loss(orgvol_ct, estvol_ct) * 2    
             cams_loss = self.loss(orgcam_ct, estcam_ct) * 2         
-            im2d_loss = self.loss(orgimg_xr, estimg_xr) + self.loss(recimg_ct, estimg_ct)  
+            im2d_loss = self.loss(recimg_ct, estimg_ct) + self.loss(orgimg_xr, estimg_xr)
             tran_loss = self.loss(orgvol_ct, estrad_ct[:,[0]]) * 2     
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
