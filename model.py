@@ -40,6 +40,7 @@ from pytorch3d.renderer.cameras import (
 from pytorch3d.renderer import (
     ray_bundle_to_ray_points, 
     RayBundle, 
+    ImplicitRenderer,
     VolumeRenderer, 
     VolumeSampler, 
     GridRaysampler, 

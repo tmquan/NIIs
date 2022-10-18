@@ -329,7 +329,7 @@ class NeRVLightningModule(LightningModule):
             UNet(
                 spatial_dims=3,
                 in_channels=1,
-                out_channels=1, 
+                out_channels=2, 
                 channels=(64, 128, 256, 512, 1024, 2048), 
                 strides= (2, 2, 2, 2, 2), #(2, 2, 2, 2, 2),
                 num_res_units=2,
@@ -457,14 +457,14 @@ class NeRVLightningModule(LightningModule):
         # recimg_ct = self.forward_picture(estvol_ct, recrad_ct, estcam_ct)
 
         estrad_ct = self.forward_opacity(orgvol_ct)
-        estimg_ct = self.forward_picture(orgvol_ct, estrad_ct, orgcam_ct)
+        estimg_ct = self.forward_picture(orgvol_ct, estrad_ct[:, [1]], orgcam_ct)
         
         orgimg_dx = torch.cat([orgimg_xr, estimg_ct], dim=0)
         
         estcam_dx = self.forward_frustum(orgimg_dx)
         estvol_dx = self.forward_feature(orgimg_dx)
         estrad_dx = self.forward_opacity(estvol_dx)
-        estimg_dx = self.forward_picture(estvol_dx, estrad_dx, estcam_dx)
+        estimg_dx = self.forward_picture(estvol_dx, estrad_dx[:, [1]], estcam_dx)
 
         estcam_xr, estcam_ct = estcam_dx[[0]], estcam_dx[[1]]
         estvol_xr, estvol_ct = estvol_dx[[0]], estvol_dx[[1]]
@@ -474,14 +474,14 @@ class NeRVLightningModule(LightningModule):
         if batch_idx == 0:
             viz2d = torch.cat([
                         torch.cat([orgvol_ct[..., self.shape//2, :], 
-                                   estrad_ct[..., self.shape//2, :],
+                                   estrad_ct[:, [1], ..., self.shape//2, :],
                                    estimg_ct,
                                    estvol_ct[..., self.shape//2, :], 
-                                   recrad_ct[..., self.shape//2, :], 
+                                   recrad_ct[:, [1], ..., self.shape//2, :], 
                                    ], dim=-1),
                         torch.cat([orgimg_xr, 
                                    estvol_xr[..., self.shape//2, :],
-                                   estrad_xr[..., self.shape//2, :],
+                                   estrad_xr[:, [1], ..., self.shape//2, :],
                                    estimg_xr,
                                    recimg_ct
                                    ], dim=-1),
@@ -495,13 +495,14 @@ class NeRVLightningModule(LightningModule):
             im3d_loss = self.loss(orgvol_ct, estvol_ct) * 2    
             cams_loss = self.loss(orgcam_ct, estcam_ct) * 2         
             im2d_loss = self.loss(orgimg_xr, estimg_xr) + self.loss(recimg_ct, estimg_ct)  
-            
-        # info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+            tran_loss = self.loss(orgvol_ct, estrad_ct[:,[0]]) * 2     
+        info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
         
         return info
 
