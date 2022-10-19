@@ -22,6 +22,8 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (8192, rlimit[1]))
 from monai.networks.layers import * #Reshape
 from monai.networks.nets import * #UNet, DenseNet121, Generator
 
+from pytorch3d.implicitron.models.metrics import _get_grid_tv_loss
+
 from model import *
 from data import *
 
@@ -492,10 +494,10 @@ class NeRVLightningModule(LightningModule):
         
         # Loss
         if self.oneway==1:
-            im3d_loss = self.loss(orgvol_ct, estvol_ct) * 2    
-            cams_loss = self.loss(orgcam_ct, estcam_ct) * 2         
-            im2d_loss = self.loss(recimg_ct, estimg_ct) + self.loss(orgimg_xr, estimg_xr)
-            tran_loss = self.loss(orgvol_ct, estrad_ct[:,[0]]) * 2     
+            im3d_loss = 2 * self.loss(orgvol_ct, estvol_ct) 
+            cams_loss = 2 * self.loss(orgcam_ct, estcam_ct)      
+            im2d_loss = self.loss(estimg_ct, recimg_ct) + self.loss(orgimg_xr, estimg_xr)
+            tran_loss = 2 * self.loss(orgvol_ct, estrad_ct[:,[0]]) + _get_grid_tv_loss(estrad_dx[:,[1]])
         info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
