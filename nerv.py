@@ -439,8 +439,9 @@ class NeRVLightningModule(LightningModule):
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
+        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
+        
         with torch.no_grad():
-            orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="constant")
             n_type_ct = torch.randint(0, 2, [self.batch_size, 1], device=_device)
             if n_type_ct==0:
