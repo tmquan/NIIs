@@ -440,7 +440,7 @@ class NeRVLightningModule(LightningModule):
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
         orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
-        
+
         with torch.no_grad():
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="constant")
             n_type_ct = torch.randint(0, 2, [self.batch_size, 1], device=_device)
@@ -505,19 +505,21 @@ class NeRVLightningModule(LightningModule):
             cams_loss = self.loss(orgcam_ct, estcam_ct) * 2      
             im2d_loss = self.loss(preimg_ct, recimg_ct) \
                       + self.loss(orgimg_xr, estimg_xr)
+            tran_loss = _get_grid_tv_loss(estrad_ct)  \
+                      + _get_grid_tv_loss(recrad_ct)  \
+                      + _get_grid_tv_loss(estrad_xr)  
             # tran_loss = self.loss(orgvol_ct, estrad_ct[:, [0]]) * 3 \
             #           + _get_grid_tv_loss(   estrad_ct[:, [1]]   )  \
             #           + _get_grid_tv_loss(   recrad_ct[:, [1]]   )  \
             #           + _get_grid_tv_loss(   estrad_xr[:, [1]]   )  
             # tran_loss = 2 * self.loss(orgvol_ct, estrad_ct[:,[0]]) + _get_grid_tv_loss(estrad_dx[:,[1]])
-        # info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss}  
-
-        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        info = {f'loss': 1e0*im3d_loss + 1e0*tran_loss + 1e0*im2d_loss + 1e0*cams_loss}  
+        # info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
-        # self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
+        self.log(f'{stage}_tran_loss', tran_loss, on_step=(stage=='train'), prog_bar=False, logger=True, sync_dist=True, batch_size=self.batch_size)
         
         return info
 
