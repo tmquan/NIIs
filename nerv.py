@@ -404,12 +404,12 @@ class NeRVLightningModule(LightningModule):
     
     def forward_opacity(self, image3d: torch.Tensor, opacity_type: str= 'stochastic') -> torch.Tensor:
         if opacity_type=='stochastic':
-            return self.opacity_net(image3d) 
-        elif opacity_type=='deterministic':
-            return self.opacity_net(image3d) 
+            return torch.rand_like(image3d) 
         elif opacity_type=='constant':
             return torch.ones_like(image3d)
-
+        elif opacity_type=='deterministic':
+            return self.opacity_net(image3d) 
+        
     def forward_picture(self, image3d: torch.Tensor, density: torch.Tensor, frustum_feat: torch.Tensor, norm_type: str="normalized") -> torch.Tensor:
         features = image3d.repeat(1, 3, 1, 1, 1)
         frustums = init_random_cameras(cam_type=FoVPerspectiveCameras, 
@@ -442,7 +442,7 @@ class NeRVLightningModule(LightningModule):
         orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
 
         with torch.no_grad():
-            prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="constant")
+            prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="stochastic")
             n_type_ct = torch.randint(0, 2, [self.batch_size, 1], device=_device)
             if n_type_ct==0:
                 preimg_ct = self.forward_picture(orgvol_ct, prerad_ct, orgcam_ct, norm_type="normalized")
