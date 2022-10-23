@@ -402,7 +402,7 @@ class NeRVLightningModule(LightningModule):
     def forward(self, image3d):
         pass
     
-    def forward_opacity(self, image3d: torch.Tensor, opacity_type: str= 'stochastic') -> torch.Tensor:
+    def forward_opacity(self, image3d: torch.Tensor, opacity_type: str= 'deterministic') -> torch.Tensor:
         if opacity_type=='stochastic':
             return torch.rand_like(image3d) 
         elif opacity_type=='constant':
