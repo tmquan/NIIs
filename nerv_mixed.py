@@ -520,14 +520,16 @@ class NeRVLightningModule(LightningModule):
         im3d_loss = self.loss(orgvol_ct, estvol_ct) * 3 
         cams_loss = self.loss(orgcam_ct, estcam_ct) * 3      
         
-        if optimizer_idx==0: # forward picture
-            info = {f'loss': 1e0*im2d_loss} 
-        if optimizer_idx==1: # forward density
-            info = {f'loss': 1e0*im3d_loss}
-        if optimizer_idx==2: # forward density
-            info = {f'loss': 1e0*cams_loss}
-        else:    
-            info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+        # if optimizer_idx==0: # forward picture
+        #     info = {f'loss': 1e0*im2d_loss} 
+        # if optimizer_idx==1: # forward density
+        #     info = {f'loss': 1e0*im3d_loss}
+        # if optimizer_idx==2: # forward density
+        #     info = {f'loss': 1e0*cams_loss}
+        # else:    
+        #     info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
+
+        info = {f'loss': 1e0*im3d_loss + 1e0*im2d_loss + 1e0*cams_loss} 
         
         self.log(f'{stage}_im2d_loss', im2d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         self.log(f'{stage}_im3d_loss', im3d_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
@@ -535,7 +537,7 @@ class NeRVLightningModule(LightningModule):
         return info
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        return self._common_step(batch, batch_idx, optimizer_idx, stage='train')
+        return self._common_step(batch, batch_idx, optimizer_idx=0, stage='train')
 
     def validation_step(self, batch, batch_idx):
         return self._common_step(batch, batch_idx, optimizer_idx=0, stage='validation')
@@ -557,28 +559,28 @@ class NeRVLightningModule(LightningModule):
         return self._common_epoch_end(outputs, stage='test')
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        #     optimizer, T_max=10, eta_min=self.lr / 10
-        # )
-        # return [optimizer], [scheduler]
-        optimizers = [
-            torch.optim.RAdam([
-                {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-            torch.optim.RAdam([
-                {'params': self.clarity_net.parameters()}, 
-                {'params': self.density_net.parameters()},
-                {'params': self.mixture_net.parameters()}
-                ], lr=1e0*(self.lr or self.learning_rate)), \
-            torch.optim.RAdam([
-                {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
-        ]
-        schedulers = [
-            torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[0], T_max=10, eta_min=self.lr / 10),
-            torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[1], T_max=10, eta_min=self.lr / 10),
-            torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[2], T_max=10, eta_min=self.lr / 10)
-        ]
-        return optimizers, schedulers
+        optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=10, eta_min=self.lr / 10
+        )
+        return [optimizer], [scheduler]
+        # optimizers = [
+        #     torch.optim.RAdam([
+        #         {'params': self.opacity_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        #     torch.optim.RAdam([
+        #         {'params': self.clarity_net.parameters()}, 
+        #         {'params': self.density_net.parameters()},
+        #         {'params': self.mixture_net.parameters()}
+        #         ], lr=1e0*(self.lr or self.learning_rate)), \
+        #     torch.optim.RAdam([
+        #         {'params': self.frustum_net.parameters()}], lr=1e0*(self.lr or self.learning_rate)), \
+        # ]
+        # schedulers = [
+        #     torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[0], T_max=10, eta_min=self.lr / 10),
+        #     torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[1], T_max=10, eta_min=self.lr / 10),
+        #     torch.optim.lr_scheduler.CosineAnnealingLR(optimizers[2], T_max=10, eta_min=self.lr / 10)
+        # ]
+        # return optimizers, schedulers
         
 if __name__ == "__main__":
     parser = ArgumentParser()
