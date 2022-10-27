@@ -339,7 +339,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
@@ -356,7 +356,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
             nn.Sigmoid()
@@ -374,7 +374,7 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
@@ -389,6 +389,8 @@ class NeRVLightningModule(LightningModule):
                 num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
+                norm=Norm.BATCH,
+                # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
@@ -454,7 +456,7 @@ class NeRVLightningModule(LightningModule):
 
         with torch.no_grad():
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="stochastic")
-            preimg_ct = self.forward_picture(orgvol_ct, prerad_ct, orgcam_ct, norm_type="standardized") 
+            preimg_ct = self.forward_picture(orgvol_ct, prerad_ct, orgcam_ct, norm_type="standardized").detach() 
             # n_type_ct = torch.randint(0, 2, [self.batch_size, 1], device=_device)
             # if n_type_ct==0:
             #     preimg_ct = self.forward_picture(orgvol_ct, prerad_ct, orgcam_ct, norm_type="normalized")
@@ -532,7 +534,7 @@ class NeRVLightningModule(LightningModule):
         self.log(f'{stage}_cams_loss', cams_loss, on_step=(stage=='train'), prog_bar=True, logger=True, sync_dist=True, batch_size=self.batch_size)
         return info
 
-    def training_step(self, batch, batch_idx, optimizer_idx=0):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         return self._common_step(batch, batch_idx, optimizer_idx, stage='train')
 
     def validation_step(self, batch, batch_idx):
