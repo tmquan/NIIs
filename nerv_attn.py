@@ -20,13 +20,13 @@ rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (8192, rlimit[1]))
 
 from monai.networks.layers import * #Reshape
-from monai.networks.nets import * #Unet, DenseNet121, Generator
+from monai.networks.nets import * #AttentionUnet, DenseNet121, Generator
 
 from pytorch3d.implicitron.models.metrics import _get_grid_tv_loss
 
 from model import *
 from data import *
-
+# 
 class NeRVDataModule(LightningDataModule):
     def __init__(self, 
         train_image3d_folders: str = "path/to/folder", 
@@ -328,34 +328,34 @@ class NeRVLightningModule(LightningModule):
         )
     
         self.opacity_net = nn.Sequential(
-            Unet(
+            AttentionUnet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
                 channels=(64, 128, 256, 512, 1024), 
                 strides= (2, 2, 2, 2), #(2, 2, 2, 2, 2),
-                num_res_units=2,
+                # num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
 
         self.clarity_net = nn.Sequential(
-            Unet(
+            AttentionUnet(
                 spatial_dims=2,
                 in_channels=1, 
                 out_channels=self.shape,
                 channels=(64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2),
-                num_res_units=4,
+                # num_res_units=4,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
@@ -363,35 +363,35 @@ class NeRVLightningModule(LightningModule):
         )
 
         self.density_net = nn.Sequential(
-            Unet(
+            AttentionUnet(
                 spatial_dims=3,
                 in_channels=1,
                 out_channels=1, 
                 channels=(64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2),
-                num_res_units=2,
+                # num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
 
         self.mixture_net = nn.Sequential(
-            Unet(
+            AttentionUnet(
                 spatial_dims=3,
                 in_channels=2,
                 out_channels=1, 
                 channels=(64, 128, 256, 512, 1024),
                 strides=(2, 2, 2, 2),
-                num_res_units=2,
+                # num_res_units=2,
                 kernel_size=3,
                 up_kernel_size=3,
-                act=("LeakyReLU", {"inplace": True}),
-                norm=Norm.BATCH,
-                dropout=0.5,
+                # act=("LeakyReLU", {"inplace": True}),
+                # norm=Norm.BATCH,
+                # dropout=0.5,
             ), 
             nn.Sigmoid()
         )
