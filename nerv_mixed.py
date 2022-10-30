@@ -341,7 +341,7 @@ class NeRVLightningModule(LightningModule):
                 norm=Norm.BATCH,
                 # dropout=0.5,
             ), 
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
         self.clarity_net = nn.Sequential(
@@ -356,10 +356,10 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            nn.Sigmoid()
+            # nn.Tanh()
         )
 
         self.density_net = nn.Sequential(
@@ -374,9 +374,9 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                # dropout=0.5,
+                dropout=0.5,
             ), 
-            nn.Sigmoid()
+            # nn.Tanh()
         )
 
         self.mixture_net = nn.Sequential(
@@ -391,9 +391,9 @@ class NeRVLightningModule(LightningModule):
                 up_kernel_size=3,
                 act=("LeakyReLU", {"inplace": True}),
                 norm=Norm.BATCH,
-                dropout=0.5,
+                # dropout=0.5,
             ), 
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
         self.frustum_net = nn.Sequential(
@@ -405,7 +405,7 @@ class NeRVLightningModule(LightningModule):
                 pretrained=True, 
                 adv_prop=True,
             ),
-            nn.Sigmoid()
+            nn.Tanh()
         )
         
         # self.l1loss = nn.L1Loss(reduction="mean")
@@ -422,7 +422,7 @@ class NeRVLightningModule(LightningModule):
         elif opacity_type=='constant':
             return torch.ones_like(image3d)
         elif opacity_type=='deterministic':
-            return self.opacity_net(image3d) 
+            return self.opacity_net(image3d * 2.0 - 1.0) * 0.5 + 0.5
         
     def forward_picture(self, image3d: torch.Tensor, density: torch.Tensor, frustum_feat: torch.Tensor, norm_type: str="normalized") -> torch.Tensor:
         features = image3d.repeat(1, 3, 1, 1, 1)
@@ -430,30 +430,30 @@ class NeRVLightningModule(LightningModule):
                             batch_size=image3d.shape[0], 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
-                            cam_ft=frustum_feat * 2. - 1., 
+                            cam_ft=frustum_feat, 
                         ).to(image3d.device)
         volumes = Volumes(
             features = features, 
-            densities = (density * 2. - 1.) * rad_bw["beta"] + rad_mu["beta"], # Set min and max boundaries of energy of density
+            densities = density * rad_bw["beta"] + rad_mu["beta"], # Set min and max boundaries of energy of density
             voxel_size = 3.0 / self.shape,
         )
         pictures = self.viewer(volumes=volumes, cameras=frustums, norm_type=norm_type)
         return pictures
 
     def forward_feature(self, image2d: torch.Tensor) -> torch.Tensor:
-        clarity = self.clarity_net(image2d) 
-        density = self.density_net(clarity) 
-        return self.mixture_net(torch.cat([clarity, density], dim=1))
+        clarity = self.clarity_net(image2d * 2.0 - 1.0) 
+        density = self.density_net(clarity * 2.0 - 1.0) 
+        return self.mixture_net(torch.cat([clarity, density], dim=1)) * 0.5 + 0.5
     
     def forward_frustum(self, image2d: torch.Tensor) -> torch.Tensor:
-        frustum = self.frustum_net(image2d)
+        frustum = self.frustum_net(image2d * 2.0 - 1.0)
         return frustum 
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
-        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
+        orgcam_ct = torch.rand(self.batch_size, 3, device=_device) * 2.0 - 1.0
 
         with torch.no_grad():
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="stochastic")
@@ -652,16 +652,6 @@ if __name__ == "__main__":
 
     # Create data module
     train_image3d_folders = [
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
-
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
-
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-1'),
@@ -671,8 +661,18 @@ if __name__ == "__main__":
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/val/images'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
+
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
     ]
     train_label3d_folders = [
 
@@ -684,25 +684,16 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
+
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
+        # # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
     ]
     train_label2d_folders = [
     ]
 
     val_image3d_folders = [
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
-
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
-
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/NSCLC/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-0'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MOSMED/processed/train/images/CT-1'),
@@ -712,8 +703,18 @@ if __name__ == "__main__":
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Imagenglab/processed/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/train/images'),
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/MELA2022/raw/val/images'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
-        os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/train/images'),
+        # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/AMOS2022/raw/val/images'),
+        
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/train/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/train/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/val/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/val/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2019/raw/test/rawdata/'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/Verse2020/raw/test/rawdata/'),
+
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/train/images'),
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/UWSpine/processed/test/images/'),
     ]
     val_image2d_folders = [
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/JSRT/processed/images/'), 
@@ -721,10 +722,10 @@ if __name__ == "__main__":
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/Montgomery/processed/images/'),
         # os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/train/images/'), 
         os.path.join(hparams.datadir, 'ChestXRLungSegmentation/VinDr/v1/processed/test/images/'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
-        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
-        os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62020/20200501/raw/images'), 
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/T62021/20211101/raw/images'), 
+        # # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/train/images/'), 
+        # os.path.join(hparams.datadir, 'SpineXRVertSegmentation/VinDr/v1/processed/test/images/'), 
     ]
 
     test_image3d_folders = val_image3d_folders
