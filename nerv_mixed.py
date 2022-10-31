@@ -216,7 +216,7 @@ cam_mu = {
     "dist": 3.5,
     "elev": 0.0,
     "azim": 0,
-    "fov" : 80,
+    "fov" : 60,
 }
 cam_bw = {
     "dist": 0.5,
