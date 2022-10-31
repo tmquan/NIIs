@@ -359,7 +359,7 @@ class NeRVLightningModule(LightningModule):
                 dropout=0.5,
             ), 
             Reshape(*[1, self.shape, self.shape, self.shape]),
-            # nn.Tanh()
+            nn.Tanh()
         )
 
         self.density_net = nn.Sequential(
@@ -376,7 +376,7 @@ class NeRVLightningModule(LightningModule):
                 norm=Norm.BATCH,
                 dropout=0.5,
             ), 
-            # nn.Tanh()
+            nn.Tanh()
         )
 
         self.mixture_net = nn.Sequential(
@@ -411,7 +411,7 @@ class NeRVLightningModule(LightningModule):
         # self.l1loss = nn.L1Loss(reduction="mean")
         # self.hbloss = nn.HuberLoss(reduction="mean")
         # self.smloss = nn.SmoothL1Loss(reduction="mean", beta=0.1)
-        self.loss = nn.SmoothL1Loss(reduction="mean", beta=0.1)
+        self.loss = nn.SmoothL1Loss(reduction="mean", beta=0.05)
 
     def forward(self, image3d):
         pass
@@ -430,7 +430,7 @@ class NeRVLightningModule(LightningModule):
                             batch_size=image3d.shape[0], 
                             cam_mu=cam_mu,
                             cam_bw=cam_bw,
-                            cam_ft=frustum_feat, 
+                            cam_ft=frustum_feat * 2.0 - 1.0, 
                         ).to(image3d.device)
         volumes = Volumes(
             features = features, 
@@ -442,18 +442,18 @@ class NeRVLightningModule(LightningModule):
 
     def forward_feature(self, image2d: torch.Tensor) -> torch.Tensor:
         clarity = self.clarity_net(image2d * 2.0 - 1.0) 
-        density = self.density_net(clarity * 2.0 - 1.0) 
+        density = self.density_net(clarity) 
         return self.mixture_net(torch.cat([clarity, density], dim=1)) * 0.5 + 0.5
     
     def forward_frustum(self, image2d: torch.Tensor) -> torch.Tensor:
-        frustum = self.frustum_net(image2d * 2.0 - 1.0)
+        frustum = self.frustum_net(image2d * 2.0 - 1.0) * 0.5 + 0.5
         return frustum 
 
     def _common_step(self, batch, batch_idx, optimizer_idx, stage: Optional[str]='evaluation'):   
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
-        orgcam_ct = torch.rand(self.batch_size, 3, device=_device) * 2.0 - 1.0
+        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
 
         with torch.no_grad():
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="stochastic")
