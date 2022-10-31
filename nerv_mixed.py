@@ -216,13 +216,13 @@ cam_mu = {
     "dist": 3.5,
     "elev": 0.0,
     "azim": 0,
-    "fov" : 90,
+    "fov" : 80,
 }
 cam_bw = {
     "dist": 0.5,
     "elev": 90.,    #"elev": 0.,
     "azim": 180,    #"azim": 0,
-    "fov" : 30.,
+    "fov" : 20.,
 }
 
 rad_mu = {
