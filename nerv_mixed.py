@@ -216,11 +216,13 @@ cam_mu = {
     "dist": 3.5,
     "elev": 0.0,
     "azim": 0,
+    "fov" : 90,
 }
 cam_bw = {
     "dist": 0.5,
     "elev": 90.,    #"elev": 0.,
     "azim": 180,    #"azim": 0,
+    "fov" : 30.,
 }
 
 rad_mu = {
@@ -401,7 +403,7 @@ class NeRVLightningModule(LightningModule):
                 model_name="efficientnet-b8", 
                 spatial_dims=2,
                 in_channels=1, 
-                num_classes=3,
+                num_classes=4,
                 pretrained=True, 
                 adv_prop=True,
             ),
@@ -453,7 +455,7 @@ class NeRVLightningModule(LightningModule):
         _device = batch["image3d"].device
         orgvol_ct = batch["image3d"]
         orgimg_xr = batch["image2d"]
-        orgcam_ct = torch.rand(self.batch_size, 3, device=_device)
+        orgcam_ct = torch.rand(self.batch_size, 4, device=_device)
 
         with torch.no_grad():
             prerad_ct = self.forward_opacity(orgvol_ct, opacity_type="stochastic")

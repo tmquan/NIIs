@@ -76,14 +76,14 @@ cam_mu = {
     "dist": 3.0,
     "elev": 0.0,
     "azim": 180,
-    # "fov": 60.,
+    "fov": 60.,
     # "aspect_ratio": 1.0,
 }
 cam_bw = {
     "dist": 0.3,
     "elev": 90., #"elev": 0.,
     "azim": 180,   #"azim": 0,
-    # "fov": 30.,
+    "fov": 30.,
     # "aspect_ratio": 0.2
 }
 
@@ -101,17 +101,19 @@ def init_random_cameras(
         dist = cam_ft[:, 0] * cam_bw["dist"] + cam_mu["dist"]
         elev = cam_ft[:, 1] * cam_bw["elev"] + cam_mu["elev"] 
         azim = cam_ft[:, 2] * cam_bw["azim"] + cam_mu["azim"] 
+        fov = cam_ft[:, 3] * cam_bw["fov"] + cam_mu["fov"] 
     else:
         dist = torch.Tensor(batch_size).uniform_(cam_mu["dist"] - cam_bw["dist"], cam_mu["dist"] + cam_bw["dist"]) if random else cam_mu["dist"]
         elev = torch.Tensor(batch_size).uniform_(cam_mu["elev"] - cam_bw["elev"], cam_mu["elev"] + cam_bw["elev"]) if random else cam_mu["elev"]
         azim = torch.Tensor(batch_size).uniform_(cam_mu["azim"] - cam_bw["azim"], cam_mu["azim"] + cam_bw["azim"]) if random else cam_mu["azim"]
+        fov = torch.Tensor(batch_size).uniform_(cam_mu["fov"] - cam_bw["fov"], cam_mu["fov"] + cam_bw["fov"]) if random else cam_mu["fov"]
 
     cam_params = {}
     
     R, T = look_at_view_transform(dist.float(), elev.float(), azim.float(), degrees=True, device=device)
     R = R.float()
     T = T.float()
-    cam_params = {"R": R, "T": T}
+    cam_params = {"R": R, "T": T, "fov": fov}
     return cam_type(**cam_params)
 
 def get_emb(sin_inp):
