@@ -213,16 +213,16 @@ class NeRVDataModule(LightningDataModule):
         return self.val_loader
 
 cam_mu = {
-    "dist": 3.5,
+    "dist": 3.3,
     "elev": 0.0,
     "azim": 0,
-    "fov" : 60,
+    "fov" : 45,
 }
 cam_bw = {
-    "dist": 0.5,
+    "dist": 0.3,
     "elev": 90.,    #"elev": 0.,
     "azim": 180,    #"azim": 0,
-    "fov" : 20.,
+    "fov" : 15.,
 }
 
 rad_mu = {
